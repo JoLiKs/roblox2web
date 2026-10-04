@@ -276,7 +276,10 @@ ENV.boot = function (opts) {
     out: (s) => ENV.log('out', 'rt', s), warn: (s) => ENV.log('warn', 'rt', s), err: (s) => ENV.log('err', 'rt', s),
   });
   rt.rngState = opts.seed !== undefined ? opts.seed : (Date.now() & 0x7fffffff);
-  ENV.epoch0 = Date.now();
+  ENV.epoch0 = opts.epoch0 !== undefined ? opts.epoch0 : Date.now();
+  // единое виртуальное время: os.clock / os.time / tick идут вместе с кадрами (детерминированные тесты, simulate())
+  rt.clockFn = () => rt.now;
+  rt.unixTime = () => ENV.epoch0 + rt.now * 1000;
   rt.onThreadError = (msg, co) => {
     const who = co && co.ctx ? co.ctx.name : 'server';
     ENV.log('err', who, msg + (co && co.script ? '' : ''));
