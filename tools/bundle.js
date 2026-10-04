@@ -28,7 +28,7 @@ function bundle(entry, post) {
 function build(outDir) {
   fs.mkdirSync(outDir, { recursive: true });
   const rt = bundle(path.join(root, 'rbx/boot.js'));
-  const cv = bundle(path.join(root, 'rbx/convert.js'), 'window.R2WConv={convert:entry,project:req("rbx/project.js"),headless:null,lexer:req("lua2js/lexer.js")};');
+  const cv = bundle(path.join(root, 'rbx/site.js'), 'window.R2WConv={site:entry,convert:req("rbx/convert.js"),project:req("rbx/project.js")};');
   const hdr = (n) => `/* roblox2web 2.0 ${n} — bundled from lua2js/ and rbx/ (MIT) */\n`;
   fs.writeFileSync(path.join(outDir, 'runtime.js'), hdr('runtime') + rt);
   fs.writeFileSync(path.join(outDir, 'converter.js'), hdr('converter') + cv);

@@ -1,86 +1,77 @@
-(function () {
 'use strict';
-const $ = id => document.getElementById(id);
-$('ver').textContent = Convert.VERSION;
-let lastZip = null, lastRes = null;
-const TPL = ['index.html', 'style.css', 'game.js', 'i18n.js', 'report.html'];
-let templates = null;
-async function loadTemplates() {
-  if (templates) return templates;
-  templates = {};
-  await Promise.all(TPL.map(async n => { const r = await fetch('template/' + n); if (!r.ok) throw new Error('Не удалось загрузить шаблон ' + n); templates[n] = await r.text(); }));
-  return templates;
-}
-const setStatus = (msg, cls) => { const s = $('status'); s.textContent = msg; s.className = 'status ' + (cls || ''); };
-async function gunzip(buf) {
-  if (typeof DecompressionStream === 'undefined') throw new Convert.ConvertError('format', 'Ваш браузер не умеет распаковывать .tar.gz (нет DecompressionStream). Используйте .zip или локальный CLI.');
-  const ds = new DecompressionStream('gzip');
-  const stream = new Blob([buf]).stream().pipeThrough(ds);
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-async function readArchive(buf, name) {
-  const u8 = new Uint8Array(buf);
-  if (!u8.length) throw new Convert.ConvertError('empty', 'Файл пустой (0 байт). Выберите .zip или .tar.gz с проектом Roblox.');
-  try {
-    if (u8[0] === 0x50 && u8[1] === 0x4B) {
-      const z = await JSZip.loadAsync(u8); const entries = [];
-      for (const f of Object.values(z.files)) if (!f.dir) entries.push([f.name, await f.async('uint8array')]);
-      return Convert.normalizeFiles(entries);
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const C = window.R2WConv;
+  let lastSite = null, lastName = 'site';
+  $('ver').textContent = C.convert.VERSION;
+  const setStatus = (t, err) => { const s = $('status'); s.textContent = t; s.className = 'status' + (err ? ' err' : ''); };
+  async function readFiles(name, buf) {
+    const u8 = new Uint8Array(buf);
+    if (!u8.length) throw new C.project.ConvertError('empty', 'Файл пустой.');
+    if (u8[0] === 0x50 && u8[1] === 0x4b) {
+      let zip; try { zip = await JSZip.loadAsync(u8); } catch (e) { throw new C.project.ConvertError('broken', 'Архив повреждён: ' + e.message); }
+      const out = []; for (const n of Object.keys(zip.files)) { const f = zip.files[n]; if (!f.dir) out.push([n, await f.async('uint8array')]); }
+      return C.project.normalizeFiles(out);
     }
-    if ((u8[0] === 0x1f && u8[1] === 0x8b) || /\.(tar|tgz|tar\.gz)$/i.test(name)) {
-      const raw = (u8[0] === 0x1f && u8[1] === 0x8b) ? await gunzip(u8) : u8;
-      return Convert.normalizeFiles(Convert.parseTar(raw));
+    if (u8[0] === 0x1f && u8[1] === 0x8b) {
+      if (typeof DecompressionStream === 'undefined') throw new C.project.ConvertError('unsupported', 'Браузер не умеет распаковывать gzip — используйте .zip.');
+      let raw; try { raw = new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()); } catch (e) { throw new C.project.ConvertError('broken', 'Архив повреждён (gzip).'); }
+      return C.project.normalizeFiles(C.project.parseTar(raw));
     }
-  } catch (e) {
-    if (e instanceof Convert.ConvertError) throw e;
-    throw new Convert.ConvertError('broken', 'Архив повреждён или не читается (' + (e && e.message || e) + ').');
+    if (/\.rbxlx$/i.test(name)) return C.project.normalizeFiles([[name, u8]]);
+    if (/\.rbxl$/i.test(name)) throw new C.project.ConvertError('binary_rbxl', 'Бинарный .rbxl не поддерживается — сохраните место как .rbxlx.');
+    if (u8.length > 262 && String.fromCharCode(...u8.slice(257, 262)) === 'ustar') return C.project.normalizeFiles(C.project.parseTar(u8));
+    throw new C.project.ConvertError('unknown', 'Неизвестный формат: нужен .zip, .tar.gz/.tgz или .rbxlx');
   }
-  throw new Convert.ConvertError('format', 'Неизвестный формат файла. Нужен .zip, .tar.gz или .tgz.');
-}
-async function run(buf, name) {
-  $('result').classList.add('hidden'); $('preview').classList.add('hidden');
-  setStatus('Читаю архив…');
-  try {
-    const files = await readArchive(buf, name);
-    setStatus('Анализирую Luau-скрипты…');
-    await new Promise(r => setTimeout(r, 20));
-    const tpl = await loadTemplates();
-    const res = Convert.convertFiles(files, tpl, {});
-    lastRes = res;
-    const zip = new JSZip();
-    for (const [n, c] of Object.entries(res.files)) zip.file(n, c);
-    lastZip = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    $('verdict').textContent = res.report.verdict; $('verdict').className = 'verdict ' + (res.status === 'game' ? 'ok' : 'bad');
-    $('report').textContent = res.text;
-    $('result').classList.remove('hidden');
-    setStatus(res.status === 'game' ? 'Готово: собрана играбельная веб-демо.' : 'Игра не распознана: собрана только страница-отчёт (не игра).', res.status === 'game' ? 'ok' : 'warn');
-  } catch (e) {
-    lastZip = null; lastRes = null;
-    if (e instanceof Convert.ConvertError) setStatus('Ошибка [' + e.code + ']: ' + e.userMessage, 'err');
-    else setStatus('Непредвиденная ошибка: ' + (e && e.message || e), 'err');
+  async function assets() {
+    const get = async (p, bin) => { const r = await fetch(p); if (!r.ok) throw new Error(p + ': ' + r.status); return r.text(); };
+    return { 'runtime.js': await get('runtime.js'), 'vendor/three.min.js': await get('vendor/three.min.js'), 'vendor/LICENSE-three.txt': await get('vendor/LICENSE-three.txt') };
   }
-}
-function handleFile(f) { if (!f) return; const r = new FileReader(); r.onload = () => run(r.result, f.name); r.onerror = () => setStatus('Не удалось прочитать файл.', 'err'); r.readAsArrayBuffer(f); }
-const drop = $('drop'), inp = $('file');
-drop.addEventListener('click', () => inp.click());
-drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') inp.click(); });
-inp.addEventListener('change', () => handleFile(inp.files[0]));
-['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
-$('sampleBtn').addEventListener('click', async () => {
-  setStatus('Загружаю пример…');
-  try { const r = await fetch('sample/PetCollectorSimulator.zip'); if (!r.ok) throw new Error(r.status); run(await r.arrayBuffer(), 'PetCollectorSimulator.zip'); }
-  catch (e) { setStatus('Не удалось загрузить пример: ' + e.message, 'err'); }
-});
-$('dlBtn').addEventListener('click', () => {
-  if (!lastZip) return; const a = document.createElement('a'); a.href = URL.createObjectURL(lastZip); a.download = (lastRes && lastRes.status === 'game' ? 'web-demo' : 'report') + '.zip'; document.body.append(a); a.click(); a.remove();
-});
-$('previewBtn').addEventListener('click', () => {
-  if (!lastRes) return; const f = lastRes.files;
-  let html = f['index.html'];
-  html = html.replace(/<link rel="stylesheet" href="style.css">/, () => '<style>' + (f['style.css'] || '') + '</style>');
-  html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) => (f[src] !== undefined ? '<script>' + String(f[src]).replace(/<\/script/gi, '<\\/script') + '<\/script>' : m));
-  const fr = $('preview'); fr.classList.remove('hidden'); fr.srcdoc = html; fr.scrollIntoView({ behavior: 'smooth' });
-});
+  async function handle(name, buf) {
+    $('result').classList.add('hidden'); $('preview').classList.add('hidden'); $('preview').removeAttribute('src');
+    setStatus('Читаю архив…');
+    try {
+      const files = await readFiles(name, buf);
+      setStatus('Транспилирую Luau → JS…');
+      await new Promise((r) => setTimeout(r, 20));
+      const prj = C.project.loadProject(files);
+      if (!prj.scripts().length) throw new C.project.ConvertError('no_scripts', 'В проекте нет скриптов.');
+      const { files: site, result } = C.site.buildSite(prj, await assets());
+      const rep = result.report;
+      if (rep.scripts.failed.length === rep.scripts.total) throw new C.project.ConvertError('transpile', 'Ни один скрипт не удалось транспилировать:\n' + rep.scripts.failed.map((f) => f.path + ': ' + f.error).join('\n'));
+      lastSite = site; lastName = (prj.name || 'site').replace(/[^\w.-]+/g, '_');
+      $('verdict').className = 'verdict' + (rep.scripts.failed.length ? ' bad' : '');
+      $('verdict').textContent = `«${prj.name}» (${prj.kind}): ${rep.scripts.transpiled}/${rep.scripts.total} скриптов транспилировано, ${rep.scripts.lines} строк Luau.` + (rep.scripts.failed.length ? ' Есть ошибки парсинга (см. отчёт).' : ' Сайт готов.');
+      $('report').textContent = C.convert.reportText(rep);
+      $('result').classList.remove('hidden'); setStatus('Готово.');
+    } catch (e) {
+      lastSite = null;
+      if (e instanceof C.project.ConvertError) setStatus('Ошибка: ' + e.userMessage, true); else { console.error(e); setStatus('Внутренняя ошибка: ' + (e && e.message), true); }
+    }
+  }
+  function previewHtml(site) {
+    // single-file HTML: inline all scripts
+    const esc = (s) => s.replace(/<\/script/gi, '<\\/script');
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;background:#111;overflow:hidden}</style></head><body><div id="r2w-root"></div><script>${esc(site['vendor/three.min.js'])}</script><script>${esc(site['runtime.js'])}</script><script>${esc(site['game.bundle.js'])}</script></body></html>`;
+  }
+  $('previewBtn').onclick = () => {
+    if (!lastSite) return; const f = $('preview'); f.classList.remove('hidden');
+    f.src = URL.createObjectURL(new Blob([previewHtml(lastSite)], { type: 'text/html' }));
+    f.scrollIntoView({ behavior: 'smooth' });
+  };
+  $('dlBtn').onclick = async () => {
+    if (!lastSite) return; const z = new JSZip(); for (const k of Object.keys(lastSite)) z.file(k, lastSite[k]);
+    const blob = await z.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = lastName + '-web.zip'; document.body.appendChild(a); a.click(); a.remove();
+  };
+  const drop = $('drop'), file = $('file');
+  drop.onclick = () => file.click(); drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') file.click(); };
+  file.onchange = async () => { const f = file.files[0]; if (f) handle(f.name, await f.arrayBuffer()); };
+  ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', async (e) => { const f = e.dataTransfer.files[0]; if (f) handle(f.name, await f.arrayBuffer()); });
+  for (const b of document.querySelectorAll('.sample')) b.onclick = async () => {
+    setStatus('Загружаю пример…'); try { const r = await fetch('sample/' + b.dataset.s + '.zip'); if (!r.ok) throw new Error(r.status); handle(b.dataset.s + '.zip', await r.arrayBuffer()); } catch (e) { setStatus('Не удалось загрузить пример: ' + e.message, true); }
+  };
+  window.__r2wHandle = handle;
 })();

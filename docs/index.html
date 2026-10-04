@@ -1,43 +1,43 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ctext y=%2713%27 font-size=%2713%27%3E🐾%3C/text%3E%3C/svg%3E">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>roblox2web — онлайн-конвертор Roblox-проекта в веб-демо</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ctext y=%2713%27 font-size=%2713%27%3E🎮%3C/text%3E%3C/svg%3E">
+<title>roblox2web 2.0 — Luau → Web: онлайн-конвертор</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div class="wrap">
-  <h1>roblox2web <small>онлайн, всё в браузере</small></h1>
-  <p class="lead">Перетащите архив <b>.zip</b> / <b>.tar.gz</b> с исходниками Roblox-проекта (Rojo: <code>default.project.json</code> + <code>src/</code>, или текстовый <code>.rbxlx</code>) — получите папку со статическим сайтом (zip). Файлы никуда не загружаются: всё считается у вас в браузере.</p>
-  <div class="warn">
-    <b>Честно об ограничениях.</b> Luau-код произвольной игры <b>нельзя</b> перевести в JavaScript, и этот инструмент этого не делает.
-    Он извлекает <i>данные</i> (питомцы, яйца, миры, апгрейды, баланс) и подставляет их в готовый шаблон «pet / clicker simulator».
-    Для проектов другого жанра или с незнакомой структурой вы получите только страницу-отчёт со списком найденных скриптов и данных.
+  <h1>roblox2web <small>2.0 · Luau → JavaScript, всё в вашем браузере</small></h1>
+  <p class="lead">Загрузите архив <b>.zip</b> / <b>.tar.gz</b> с Rojo-проектом (<code>default.project.json</code> + <code>src/</code>) или текстовый <b>.rbxlx</b>. Конвертор <b>транспилирует весь ваш Luau-код в JavaScript</b> и собирает статический сайт, где он запускается в эмуляторе Roblox (Instance-дерево, Remote-события, GUI → DOM, 3D на three.js). Файлы никуда не отправляются.</p>
+  <div class="note">
+    <b>Честно:</b> это эмулятор, а не Roblox. Покрыта большая часть частых API, но не всё (нет ассетов <code>rbxassetid://</code>, анимаций, звука, частиц, MeshPart-геометрии, настоящей сети). Для неподдержанного вы получите отчёт «покрытие API» и предупреждения <code>[r2w][unsupported]</code> в консоли страницы.
   </div>
   <div id="drop" class="drop" tabindex="0" role="button" aria-label="Выбрать архив">
     <div>⬆ Перетащите архив сюда или нажмите, чтобы выбрать</div>
-    <input id="file" type="file" accept=".zip,.tar,.gz,.tgz,application/zip,application/gzip" hidden>
+    <input id="file" type="file" accept=".zip,.tar,.gz,.tgz,.rbxlx,application/zip,application/gzip" hidden>
   </div>
-  <p><button id="sampleBtn" type="button" class="ghost">Попробовать на примере (Pet Collector Simulator, ~100 КБ)</button></p>
+  <p class="samples">Примеры: <button type="button" class="ghost sample" data-s="PetCollectorSimulator">Pet Collector Simulator 2.0</button>
+    <button type="button" class="ghost sample" data-s="obby">Obby</button>
+    <button type="button" class="ghost sample" data-s="tycoon">Tycoon</button>
+    <button type="button" class="ghost sample" data-s="guiapp">GUI-приложение</button></p>
   <div id="status" class="status" aria-live="polite"></div>
   <div id="result" class="hidden">
     <h2>Результат</h2>
     <div id="verdict" class="verdict"></div>
     <div class="btns">
-      <button id="dlBtn" type="button">⬇ Скачать zip</button>
-      <button id="previewBtn" type="button" class="ghost">▶ Предпросмотр</button>
+      <button id="dlBtn" type="button">⬇ Скачать сайт (zip)</button>
+      <button id="previewBtn" type="button" class="ghost">▶ Запустить здесь</button>
     </div>
-    <h3>Отчёт</h3>
+    <h3>Отчёт «покрытие API»</h3>
     <pre id="report"></pre>
-    <iframe id="preview" class="hidden" title="Предпросмотр" sandbox="allow-scripts allow-same-origin"></iframe>
+    <iframe id="preview" class="hidden" title="Предпросмотр" allow="fullscreen"></iframe>
   </div>
-  <p class="foot">Версия <span id="ver"></span> · Исходники и локальный CLI: <a href="https://github.com/JoLiKs/roblox2web">github.com/JoLiKs/roblox2web</a> · JSZip (MIT) вендорен локально.</p>
+  <p class="foot">Версия <span id="ver"></span> · Исходники, CLI (<code>node roblox2web.js</code> / <code>python roblox2web.py</code>): <a href="https://github.com/JoLiKs/roblox2web">github.com/JoLiKs/roblox2web</a> · JSZip, three.js — MIT, вендорены локально.</p>
 </div>
 <script src="vendor/jszip.min.js"></script>
-<script src="luau.js"></script>
-<script src="convert.js"></script>
+<script src="converter.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
