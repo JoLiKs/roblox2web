@@ -281,7 +281,7 @@ function buildRbxlx(prj, blob) {
         case 'UDim': v = { t: 'UD', v: [num(p, 'S'), num(p, 'O')] }; break;
         case 'BrickColor': v = { t: 'BC', v: parseInt(p.text, 10) }; break;
         case 'Ref': if (p.text && p.text !== 'null') v = { t: 'Ref', v: p.text.trim() }; break;
-        case 'BinaryString': if (pn === 'Tags') { try { n.tags = Buffer.from(b64decode(p.text)).toString('utf8').split('\0').filter(Boolean); } catch (e) { /* ignore */ } } break;
+        case 'BinaryString': if (pn === 'Tags') { try { n.tags = (typeof Buffer !== 'undefined' ? Buffer.from(b64decode(p.text)).toString('utf8') : new TextDecoder().decode(b64decode(p.text))).split('\0').filter(Boolean); } catch (e) { /* ignore */ } } break;
         default: break;
       }
       if (v !== undefined) n.props[pn] = v;

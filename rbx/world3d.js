@@ -269,7 +269,7 @@ class World3D {
         const maxd = Math.min(bb.props.MaxDistance, 400);
         if (!pr[3] || pr[2] > maxd) { rec.div.style.display = 'none'; continue; }
         const s = bb.props.Size; const w = rec.w, h = rec.h;
-        const scale = (s.xs || s.ys) ? Math.max(0.2, ENV.pxPerStud(pr[2]) / 25) : 1;
+        const scale = (s.xs || s.ys) ? Math.max(0.05, ENV.pxPerStud(pr[2]) / 50) : 1;
         rec.div.style.display = 'block';
         rec.div.style.transform = `translate(${(pr[0] - w * scale / 2).toFixed(1)}px,${(pr[1] - h * scale / 2).toFixed(1)}px) scale(${scale.toFixed(3)})`;
         rec.div.style.transformOrigin = '0 0';

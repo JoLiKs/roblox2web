@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""roblox2web — CLI. Пример: python roblox2web.py project.zip -o out/
+"""roblox2web 2.0 — CLI. Пример: python roblox2web.py project.zip -o out/
+
+Основной режим (по умолчанию): настоящий транспилятор Luau → JavaScript + браузерный эмулятор Roblox (запускает node ≥ 18, roblox2web.js).
+Резервный режим --mode template: старый шаблонный конвертор v1 (вытаскивает данные pet-симулятора и подставляет в шаблон; без Luau-кода).
 
 Коды выхода: 0 — собрана играбельная веб-демо; 3 — собрана только страница-отчёт (проект не распознан как поддерживаемая игра);
 2 — ошибка (пустой/битый архив, нет скриптов и т.п.).
@@ -25,8 +28,24 @@ def main(argv=None):
     ap.add_argument("--no-zip", action="store_true", help="не создавать zip")
     ap.add_argument("--strict", action="store_true", help="если игра не распознана — завершиться с ошибкой, ничего не создавая")
     ap.add_argument("--link", action="append", default=[], metavar="ТЕКСТ=URL", help="ссылка в подвале страницы (можно несколько)")
-    ap.add_argument("--version", action="version", version="roblox2web " + VERSION)
+    ap.add_argument("--mode", choices=["auto", "transpile", "template"], default="auto",
+                    help="transpile — Luau→JS (нужен node); template — резервный шаблон v1; auto — transpile, а если node нет, то template")
+    ap.add_argument("--version", action="version", version="roblox2web 2.0.0 (template-режим v" + VERSION + ")")
     a = ap.parse_args(argv)
+    if a.mode != "template" and not a.serve:
+        import shutil, subprocess
+        node = shutil.which("node") or shutil.which("nodejs")
+        if node and a.input:
+            cmd = [node, os.path.join(os.path.dirname(os.path.abspath(__file__)), "roblox2web.js"), a.input, "-o", a.out]
+            if a.strict:
+                cmd.append("--strict")
+            if not a.no_zip:
+                cmd += ["--zip", a.zip_path or (os.path.normpath(a.out) + ".zip")]
+            return subprocess.call(cmd)
+        if a.mode == "transpile":
+            print("ОШИБКА: для режима transpile нужен node (>=18).", file=sys.stderr)
+            return 2
+        print("node не найден — используется резервный шаблонный режим v1.", file=sys.stderr)
     if a.serve:
         from r2w.server import serve
         serve(port=a.port)

@@ -12,6 +12,8 @@ const S = require('./services');
 require('./players');
 const physics = require('./physics');
 const net = require('./net');
+require('./input');
+require('./layout');
 const { ENV, Instance, newInstance, CLASSES, noteUnsupported, Signal } = I;
 const { v3 } = D;
 const En = (t, n) => D.EnumLib.lget(t).lget(n);
@@ -239,8 +241,8 @@ function buildNode(node, parent, refs, pendingRefs, top) {
   let inst;
   const cls = CLASSES.get(node.cls);
   if (cls && cls.service) inst = ENV.getService(node.cls);
-  else if (top && node.cls === 'StarterPlayerScripts') inst = ENV.svc('StarterPlayer').findChild('StarterPlayerScripts');
-  else if (top && node.cls === 'StarterCharacterScripts') inst = ENV.svc('StarterPlayer').findChild('StarterCharacterScripts');
+  else if (node.cls === 'StarterPlayerScripts' || (parent && parent.className === 'StarterPlayer' && node.name === 'StarterPlayerScripts')) inst = ENV.svc('StarterPlayer').findChild('StarterPlayerScripts');
+  else if (node.cls === 'StarterCharacterScripts' || (parent && parent.className === 'StarterPlayer' && node.name === 'StarterCharacterScripts')) inst = ENV.svc('StarterPlayer').findChild('StarterCharacterScripts');
   else {
     if (!cls) { noteUnsupported('Instance.new("' + node.cls + '")'); inst = newInstance('Folder'); ENV.unknownClasses.add(node.cls); inst.props.Name = node.name; }
     else {
@@ -335,6 +337,7 @@ ENV.frame = function (dt) {
     for (const b of ENV.renderBinds.slice()) rt.spawn(b.fn, [dt], ENV.contexts.client);
     run.fireSignal('RenderStepped', dt);
   }
+  if (ENV.prompts) ENV.prompts.update(dt);
   rt.step(dt);
 };
 ENV.shutdown = function () {

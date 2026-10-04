@@ -232,7 +232,7 @@ function contentSize(k, auto, sw, sh) {
 layout.run = function (root) {
   if (root.className === 'BillboardGui' || root.className === 'SurfaceGui') {
     const s = root.props.Size || new D.UDim2(0, 100, 0, 100);
-    const w = root.className === 'BillboardGui' ? s.xo : (root.props.CanvasSize ? root.props.CanvasSize.x : 800), h = root.className === 'BillboardGui' ? s.yo : (root.props.CanvasSize ? root.props.CanvasSize.y : 600);
+    const w = root.className === 'BillboardGui' ? s.xo + s.xs * 50 : (root.props.CanvasSize ? root.props.CanvasSize.x : 800), h = root.className === 'BillboardGui' ? s.yo + s.ys * 50 : (root.props.CanvasSize ? root.props.CanvasSize.y : 600);
     root.abs = { x: 0, y: 0, w: root.billW || w, h: root.billH || h };
   } else {
     const inset = root.props.IgnoreGuiInset ? 0 : layout.inset;

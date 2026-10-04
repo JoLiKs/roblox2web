@@ -95,18 +95,19 @@ class GuiRenderer {
   isLocalRoot(r) {
     if (!r || !r.dm) return false;
     if (r.className === 'ScreenGui') { const pg = r.parent; return !!(pg && pg.className === 'PlayerGui' && pg.parent === ENV.localPlayer); }
+    if (r.className === 'BillboardGui') { for (let p = r.parent; p; p = p.parent) { if (p === ENV.workspace) return true; if (p.className === 'PlayerGui') return p.parent === ENV.localPlayer; } }
     return false;
   }
   onAttach(i) {
     if (!i.isA('GuiBase2d') && !i.isA('UIBase')) return;
     const r = layout.rootOf(i);
-    if (r && r.className === 'ScreenGui' && this.isLocalRoot(r)) { this.pending.add(r); r.layoutDirty = true; layout.dirty.add(r); }
+    if (r && this.isLocalRoot(r)) { this.pending.add(r); r.layoutDirty = true; layout.dirty.add(r); }
     if (i.className === 'SurfaceGui' && !this.warnedImages.has('SurfaceGui')) { this.warnedImages.add('SurfaceGui'); noteUnsupported('SurfaceGui (not rendered)'); ENV.log('warn', 'r2w', '[unsupported] SurfaceGui is not rendered by the emulator'); }
   }
   onDetach(i) {
     const rec = this.recs.get(i);
     if (rec) { this.drop(i); }
-    if (this.roots.has(i)) { const el = this.roots.get(i); el.remove(); this.roots.delete(i); }
+    if (this.roots.has(i)) { const el = this.roots.get(i); el.remove(); this.roots.delete(i); if (this.bbs) this.bbs.delete(i); }
     if (i.isA('GuiBase2d')) for (const d of i.descendants()) { if (this.recs.has(d)) this.drop(d); }
     if (i.isA('GuiBase2d') || i.isA('UIBase')) { const r = i.parent && layout.rootOf(i.parent); if (r && this.roots.has(r)) { r.layoutDirty = true; layout.dirty.add(r); } }
   }
@@ -194,11 +195,16 @@ class GuiRenderer {
   addRoot(r) {
     const div = this.doc.createElement('div'); div.style.cssText = 'position:absolute;pointer-events:none;';
     div.dataset.gui = r.props.Name;
-    this.layer.appendChild(div); this.roots.set(r, div);
+    if (r.className === 'BillboardGui') { this.bbLayer.appendChild(div); (this.bbs || (this.bbs = new Map())).set(r, { div, w: 100, h: 100 }); }
+    else this.layer.appendChild(div);
+    this.roots.set(r, div);
     r.layoutDirty = true; layout.dirty.add(r);
   }
   syncRoot(r) {
     const div = this.roots.get(r); const a = r.abs;
+    if (r.className === 'BillboardGui') {
+      const rec = this.bbs.get(r); rec.w = a.w; rec.h = a.h; div.style.width = a.w + 'px'; div.style.height = a.h + 'px'; div.style.left = '0px'; div.style.top = '0px'; this.syncChildren(r, div); return;
+    }
     const en = r.props.Enabled !== false;
     div.style.display = en ? 'block' : 'none';
     div.style.left = a.x + 'px'; div.style.top = a.y + 'px'; div.style.width = a.w + 'px'; div.style.height = a.h + 'px';
