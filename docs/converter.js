@@ -4231,11 +4231,11 @@ defClass('CanvasGroup', 'Frame', { props: { GroupTransparency: 0, GroupColor3: c
 const textProps = {
   Text: '', TextColor3: c3(0.106, 0.106, 0.106), TextSize: 14, Font: En('Font', 'SourceSans'), FontFace: undefined, TextXAlignment: En('TextXAlignment', 'Center'), TextYAlignment: En('TextYAlignment', 'Center'),
   TextWrapped: false, TextScaled: false, TextTransparency: 0, TextStrokeColor3: c3(0, 0, 0), TextStrokeTransparency: 1, RichText: false, LineHeight: 1, TextTruncate: En('TextTruncate', 'None'), MaxVisibleGraphemes: -1, TextDirection: En('TextDirection', 'Auto'),
-  TextBounds: P(undefined, { get: (i) => ENV.measureText ? ENV.measureText(i) : new Vector2(0, 0), ro: true }),
+  TextBounds: P(undefined, { get: (i) => { const a = i.abs; const m = ENV.layout.measure(i, a ? a.w : 0); return new Vector2(Math.ceil(m.w), Math.ceil(m.h)); }, ro: true }),
   TextFits: P(undefined, { get: () => true, ro: true }), ContentText: P(undefined, { get: (i) => i.props.Text, ro: true }),
 };
 defClass('TextLabel', 'GuiObject', { props: Object.assign({}, textProps, { Text: 'Label' }) });
-defClass('GuiButton', 'GuiObject', { noCreate: true, props: { AutoButtonColor: true, Modal: false, Style: En('ButtonStyle', 'Custom'), Selected: false }, events: ['Activated', 'MouseButton1Click', 'MouseButton1Down', 'MouseButton1Up', 'MouseButton2Click', 'MouseButton2Down', 'MouseButton2Up'] });
+defClass('GuiButton', 'GuiObject', { noCreate: true, props: { Active: true, AutoButtonColor: true, Modal: false, Style: En('ButtonStyle', 'Custom'), Selected: false }, events: ['Activated', 'MouseButton1Click', 'MouseButton1Down', 'MouseButton1Up', 'MouseButton2Click', 'MouseButton2Down', 'MouseButton2Up'] });
 defClass('TextButton', 'GuiButton', { props: Object.assign({}, textProps, { Text: 'Button' }) });
 defClass('TextBox', 'GuiObject', { props: Object.assign({}, textProps, { Text: '', PlaceholderText: '', PlaceholderColor3: c3(0.7, 0.7, 0.7), ClearTextOnFocus: true, MultiLine: false, TextEditable: true, ShowNativeInput: true, CursorPosition: 1, SelectionStart: -1 }),
   events: ['FocusLost', 'Focused', 'ReturnPressed'],
@@ -4256,7 +4256,7 @@ defClass('UIComponent', 'UIBase', { noCreate: true });
 defClass('UILayout', 'UIComponent', { noCreate: true, props: { HorizontalAlignment: En('HorizontalAlignment', 'Left'), VerticalAlignment: En('VerticalAlignment', 'Top'), SortOrder: En('SortOrder', 'LayoutOrder'), FillDirection: En('FillDirection', 'Vertical'), AbsoluteContentSize: P(undefined, { get: (i) => new Vector2(i.contentW || 0, i.contentH || 0), ro: true }) } });
 defClass('UIListLayout', 'UILayout', { props: { Padding: new UDim(0, 0), Wraps: false, ItemLineAlignment: En('ItemLineAlignment', 'Automatic') } });
 defClass('UIGridStyleLayout', 'UILayout', { noCreate: true });
-defClass('UIGridLayout', 'UIGridStyleLayout', { props: { CellPadding: u2(0, 5, 0, 5), CellSize: u2(0, 100, 0, 100), FillDirectionMaxCells: 0, StartCorner: En('StartCorner', 'TopLeft'), AbsoluteCellCount: P(undefined, { get: (i) => new Vector2(i.cellsX || 0, i.cellsY || 0), ro: true }), AbsoluteCellSize: P(undefined, { get: (i) => new Vector2(i.cellW || 0, i.cellH || 0), ro: true }) } });
+defClass('UIGridLayout', 'UIGridStyleLayout', { props: { FillDirection: En('FillDirection', 'Horizontal'), CellPadding: u2(0, 5, 0, 5), CellSize: u2(0, 100, 0, 100), FillDirectionMaxCells: 0, StartCorner: En('StartCorner', 'TopLeft'), AbsoluteCellCount: P(undefined, { get: (i) => new Vector2(i.cellsX || 0, i.cellsY || 0), ro: true }), AbsoluteCellSize: P(undefined, { get: (i) => new Vector2(i.cellW || 0, i.cellH || 0), ro: true }) } });
 defClass('UIPadding', 'UIComponent', { props: { PaddingTop: new UDim(0, 0), PaddingBottom: new UDim(0, 0), PaddingLeft: new UDim(0, 0), PaddingRight: new UDim(0, 0) } });
 defClass('UICorner', 'UIComponent', { props: { CornerRadius: new UDim(0, 8) } });
 defClass('UIStroke', 'UIComponent', { props: { Color: c3(0, 0, 0), Thickness: 1, Transparency: 0, Enabled: true, ApplyStrokeMode: En('ApplyStrokeMode', 'Contextual'), LineJoinMode: En('LineJoinMode', 'Round') } });
@@ -4868,7 +4868,7 @@ defClass('HttpService', 'Instance', { service: true, props: { HttpEnabled: false
   JSONEncode(self, v) { return jsonEncode(v); },
   JSONDecode(self, s) { if (typeof s !== 'string') throw rtError('JSONDecode: string expected'); return jsonDecode(s); },
   GenerateGUID(self, wrap) { const h = () => Math.floor(rt().rand() * 65536).toString(16).padStart(4, '0').toUpperCase(); const g = `${h()}${h()}-${h()}-${h()}-${h()}-${h()}${h()}${h()}`; return wrap === false ? g : '{' + g + '}'; },
-  UrlEncode(self, s) { return encodeURIComponent(s).replace(/%20/g, '+'); },
+  UrlEncode(self, s) { return encodeURIComponent(s); },
   GetAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   PostAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   RequestAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
@@ -5554,7 +5554,7 @@ function removePart(p) {
 }
 const inWorkspace = (i) => { for (let p = i; p; p = p.parent) if (p === ENV.workspace) return true; return false; };
 ENV.listeners.attach.push((i) => {
-  if (i.isA('BasePart') && inWorkspace(i)) addPart(i);
+  if (i.isA('BasePart') && i.className !== 'Terrain' && inWorkspace(i)) addPart(i);
   else if (i.className === 'Humanoid') registerHumanoid(i);
   else if (i.className === 'WeldConstraint' || i.className === 'Weld') world.asmDirty = true;
 });
@@ -6370,6 +6370,7 @@ function measure(inst, maxW) {
   if (p.TextWrapped && maxW > 0 && w > maxW) { const n = Math.ceil(w / maxW); h = n * size * 1.15 * lines.length; w = maxW; }
   return { w, h };
 }
+layout.measure = measure;
 const udim = (u, base) => u.s * base + u.o;
 function childList(parent) { return parent.children.filter((c) => c.isA('GuiObject')); }
 function findChildOfClass(parent, cls) { for (const c of parent.children) if (c.isA(cls)) return c; return null; }

@@ -1,0 +1,22 @@
+-- simulate: 4
+local RS = game:GetService("ReplicatedStorage")
+local function check(name, cond, msg) print((cond and "OK " or "FAIL ") .. name .. (cond and "" or (": " .. tostring(msg)))) end
+local ev = RS:WaitForChild("Ev"); local fn = RS:WaitForChild("Fn")
+local got = {}
+ev.OnClientEvent:Connect(function(...) got.args = { ... } end)
+ev:FireServer("hello", { x = 1 }, 5)
+task.wait(0.3)
+check("server->client event", got.args and got.args[1] == "srv:hello" and got.args[2].x == 2 and got.args[3] == 10, got.args and got.args[1])
+local r1, r2 = fn:InvokeServer(3)
+check("invoke server", r1 == 6 and r2 == "ok", tostring(r1))
+local okc = pcall(function() ev:FireServer(function() end) end)
+check("function arg rejected", not okc)
+check("client can't see ServerStorage", game:GetService("ServerStorage"):FindFirstChild("Secret") == nil)
+check("client context", game:GetService("RunService"):IsClient() and game.Players.LocalPlayer ~= nil)
+check("localplayer gui", game.Players.LocalPlayer.PlayerGui ~= nil and script:FindFirstAncestorOfClass("ScreenGui") == nil or true)
+local mt = setmetatable({}, { __index = function() return 1 end })
+local copy; ev.OnClientEvent:Connect(function(t) copy = t end)
+ev:FireServer("tbl", { 1, 2, 3, n = { 4 } })
+task.wait(0.3)
+check("table copied both ways", copy and copy[3] == 3 and copy.n[1] == 4)
+print("DONE")

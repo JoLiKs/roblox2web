@@ -242,7 +242,7 @@ defClass('HttpService', 'Instance', { service: true, props: { HttpEnabled: false
   JSONEncode(self, v) { return jsonEncode(v); },
   JSONDecode(self, s) { if (typeof s !== 'string') throw rtError('JSONDecode: string expected'); return jsonDecode(s); },
   GenerateGUID(self, wrap) { const h = () => Math.floor(rt().rand() * 65536).toString(16).padStart(4, '0').toUpperCase(); const g = `${h()}${h()}-${h()}-${h()}-${h()}-${h()}${h()}${h()}`; return wrap === false ? g : '{' + g + '}'; },
-  UrlEncode(self, s) { return encodeURIComponent(s).replace(/%20/g, '+'); },
+  UrlEncode(self, s) { return encodeURIComponent(s); },
   GetAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   PostAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   RequestAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },

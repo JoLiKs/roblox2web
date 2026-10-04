@@ -21,6 +21,7 @@ function measure(inst, maxW) {
   if (p.TextWrapped && maxW > 0 && w > maxW) { const n = Math.ceil(w / maxW); h = n * size * 1.15 * lines.length; w = maxW; }
   return { w, h };
 }
+layout.measure = measure;
 const udim = (u, base) => u.s * base + u.o;
 function childList(parent) { return parent.children.filter((c) => c.isA('GuiObject')); }
 function findChildOfClass(parent, cls) { for (const c of parent.children) if (c.isA(cls)) return c; return null; }

@@ -59,7 +59,7 @@ class World3D {
   }
   inWs(i) { for (let p = i; p; p = p.parent) if (p === ENV.workspace) return true; return false; }
   onAttach(i) {
-    if (i.isA('BasePart') && this.inWs(i)) { this.dirty.add(i); }
+    if (i.isA('BasePart') && i.className !== 'Terrain' && this.inWs(i)) { this.dirty.add(i); }
     else if (i.isA('Light') && this.inWs(i)) this.lights.set(i, null);
     else if (i.className === 'ParticleEmitter' || i.className === 'Beam' || i.className === 'Trail' || i.className === 'Decal' || i.className === 'Texture' || i.className === 'SpecialMesh' || i.className === 'Highlight' || i.className === 'Sky') {
       const key = i.className; if (!this.warned.has(key)) { this.warned.add(key); I.noteUnsupported(key + ' (not rendered)'); ENV.log('warn', 'r2w', `[unsupported] ${key} is accepted but not rendered by the 3D emulator`); }

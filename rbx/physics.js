@@ -69,7 +69,7 @@ function removePart(p) {
 }
 const inWorkspace = (i) => { for (let p = i; p; p = p.parent) if (p === ENV.workspace) return true; return false; };
 ENV.listeners.attach.push((i) => {
-  if (i.isA('BasePart') && inWorkspace(i)) addPart(i);
+  if (i.isA('BasePart') && i.className !== 'Terrain' && inWorkspace(i)) addPart(i);
   else if (i.className === 'Humanoid') registerHumanoid(i);
   else if (i.className === 'WeldConstraint' || i.className === 'Weld') world.asmDirty = true;
 });
