@@ -1,0 +1,67 @@
+add: 3
+sub: -2
+mul: 13.5
+div: 3.5
+div0: inf, -inf
+idiv: 3, -4, 3
+mod: 1, 2, -2, -1, 1.5
+mod0: nan
+pow: 1024, 1.4142135623730951, nan
+unm: -5, 5, 5
+prec1: 8
+prec2: -4
+prec3: true
+prec4: 123
+prec5: 512
+prec6: y
+concat_num: 1, 1.5x, -0
+str_arith: ERR ./01_basic.lua:33: attempt to perform arithmetic (add) on string and number
+str_arith_bad: ERR ./01_basic.lua:34: attempt to perform arithmetic (add) on string and number
+cmp_num: true, true, false, true, true, true
+cmp_str: true, true, true, true, true
+cmp_mixed: ERR ./01_basic.lua:37: attempt to compare number < string
+cmp_nil: ERR ./01_basic.lua:38: attempt to compare nil < number
+cmp_tbl: ERR ./01_basic.lua:39: attempt to compare table < table
+eq_types: false, false, false, true
+eq_nan: false, true
+and_or: 2, nil, 3, false, zero, empty
+and_or_chain: default
+not: true, true, false, false, false
+len_str: 5, 0, 6
+len_tbl: 3, 0, 0, 4
+len_nil: ERR ./01_basic.lua:47: attempt to get length of a nil value
+tostring_num: 10, 1.5, -0, 1e+100, 9007199254740992, 0.1
+tostring_big: 1000000000000000, 10000000000000000, 123456789012345, 0.30000000000000004, 0.3333333333333333
+tostring_exp: 0.00001, 1e-07, 5e-324, 1e+301, 9223372036854776000
+tonumber: 10, 31, 5, 5, 0.5, 100
+tonumber_bad: nil, nil, nil, nil, nil
+tonumber_base: 255, 5, 1295, nil, 18446744073709552000
+type: number, string, nil, table, function, boolean, thread
+typeof: number, table, nil
+math_float_int: true, 2147483648, 4294967297, 1000
+hex_bin_literals: 255, 10, 171, 1000000
+string_escapes: a	b, ABA, H€, ab, it's, q"q
+long_string: line1
+line2, a]]b, 1
+comment_forms: 1
+multiple_assign: 1, 2, nil
+swap: 2, 1
+multi_assign_eval: 2, 20, nil
+nested_tables: 42, 42
+global_assign: 6
+global_nil: nil
+shadow: 1
+shadow2: 2
+while_loop: 15
+repeat_scope: 4
+numfor: 55
+numfor_step: 10,7,4,1
+numfor_float: 0,0.25,0.5,0.75,1
+numfor_empty: 0
+numfor_var_copy: 10, 20, 30
+numfor_zero_step: 
+break: 15
+goto_free_continue: 25
+continue_while: 18
+continue_repeat: 13
+nested_break: 3

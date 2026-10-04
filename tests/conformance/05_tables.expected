@@ -1,0 +1,79 @@
+ctor_array: 3, 10, 30, nil
+ctor_hash: 1, 2, x, 0
+ctor_mixed: 3, y, 3
+ctor_nested_sep: 3
+ctor_trailing: 3
+ctor_nil_values: 3, nil, 3
+ctor_nil_trailing: 2
+ctor_call_expand: 3, 4, 1
+ctor_expr_keys: 1, 2, two
+ctor_dup_keys: 2
+index_missing: nil, nil, nil
+assign_nil_deletes: 0, nil
+len_after_append: 10
+len_after_remove: 2
+len_holes: true
+len_reverse_fill: 3
+float_keys: a, 2, c, b
+neg_zero_key: nz
+nan_key_set: ERR ./05_tables.lua:34: table index is NaN
+nan_key_get: nil
+nil_key_set: ERR ./05_tables.lua:36: table index is nil
+bool_keys: t, f
+table_keys: 1, 2, nil
+fn_keys: fn
+insert_end: 1,2,3,4
+insert_pos: 0,1,99,2,3
+insert_bad_args: ERR ./05_tables.lua:42: wrong number of arguments to 'insert'
+insert_nil_value: 1
+remove_end: 3, 2
+remove_pos: 2, 1,3,4
+remove_empty: 
+remove_first: a, b, 1
+concat1: , 1, 123, a, b
+concat_range: 2-3, 
+concat_float: 1.5 2 x
+concat_bad: ERR ./05_tables.lua:51: invalid value (table) at index 2 in table for 'concat'
+sort_default: 1,2,3
+sort_strings: Cherry,apple,banana
+sort_desc: 9,5,3,2,1
+sort_records: cab
+sort_large: true
+sort_mixed_error: ERR attempt to compare string < number
+sort_single: 5
+find1: 2, nil, nil
+unpack_tbl: 1, 2, 3
+pack_n: 0, 1, 2
+create: 3, 0, 0
+clear: 0, nil, nil
+clone_shallow: 1, 2, true
+clone_meta: true
+freeze: true, false, ./05_tables.lua:66: attempt to modify a readonly table
+freeze_insert: ERR attempt to modify a readonly table
+isfrozen_false: false
+move: 2,3,4,4,5
+move_other: nil, 1, 3
+move_overlap: 1,1,2,3,4
+pairs_all: 4, 33
+pairs_order_array: 1=5,2=6,3=7
+ipairs_stop_nil: 2
+ipairs_values: 38
+generic_for_direct: 6
+next_empty: nil, nil
+next_iter: a, 1, nil
+pairs_modify_existing: 12
+pairs_delete_during: nil
+rawget_rawset: 1, nil, meta
+rawequal_rawlen: true, false, 2, 3
+select_hash_tbl: 3, 3
+table_in_table_ref: true
+nested_len: 2, 2, 1
+array_of_arrays: 6, 9
+table_equality: true, false, true
+length_operator_string_key: 0, nil, a
+big_array: 12502500
+sparse_table: 1, 1
+remove_shift_holes: 3, 3
+unpack_with_nil_end: 2
+table_getn_free: 0
+tostring_table_prefix: table:, function:

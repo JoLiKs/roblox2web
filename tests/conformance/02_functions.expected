@@ -1,0 +1,68 @@
+varargs_count: 0, 1, 2, 3
+varargs_pack: 3, 1, 3
+varargs_forward: 1, 2, 3
+varargs_mid: 7
+varargs_select_neg: 3, 2, 3
+select_pos: b, c
+select_bad: ERR ./02_functions.lua:22: invalid argument #1 to 'select' (index out of range)
+multi_ret: 1, 2, 3, nil
+multi_trunc: 1
+multi_mid: 1, 1, 2, 3
+multi_table: 4
+multi_args: 2, 10
+ret_none: 0
+ret_nil: 1
+tail_call: 5050
+recursion_fib: 6765
+closure_counter: 3, 1
+closure_shared: 2
+closure_loop: 1, 2, 3
+closure_while: 1, 2, 3
+closure_upvalue_mutation: 2
+method_call: 5, 3
+method_str: ABC, xx
+method_on_nil: ERR ./02_functions.lua:39: attempt to index nil with 'foo'
+call_nil: ERR ./02_functions.lua:40: attempt to call a nil value
+call_number: ERR ./02_functions.lua:41: attempt to call a number value
+call_field_nil: ERR ./02_functions.lua:42: attempt to call a nil value
+call_method_nil: ERR ./02_functions.lua:43: attempt to call missing method 'nomethod' of table
+fn_in_table: 8, 10
+fn_define_nested: 2, true
+anon_call: 7
+string_call: [x], [y]
+table_call: 3
+default_arg: 11, 3
+extra_args: 1
+fn_equal: true, false
+pcall_ok: true, 1, 2
+pcall_err: false, msg
+pcall_err_tbl: false, table, 7
+pcall_nil: false, attempt to call a nil value
+xpcall: false, H:bad
+xpcall_args: true, 7
+error_level0: ERR x
+error_level1: ERR ./02_functions.lua:59: x
+error_level2: ERR ./02_functions.lua:60: x
+error_noarg: ERR nil
+error_nonstring: ERR ./02_functions.lua:62: 42
+error_table_pcall: false, custom
+assert_ok: 1, v
+assert_fail: ERR ./02_functions.lua:65: assertion failed!
+assert_msg: ERR ./02_functions.lua:66: custom message
+assert_tbl: false, string
+nested_pcall: true, false, x
+pcall_returns_all: true, 1, nil, 3
+error_rethrow: inner!
+stackoverflow: false, string
+deep_recursion_ok: 500
+unpack: 1, 2, 3
+unpack_range: 2, 3
+unpack_nil_holes: 3
+pack: 3, 1, nil, 3
+fn_type: function, function, function
+recursive_local: 3628800
+mutual_recursion: true, true
+vararg_in_table_mid: 2
+vararg_nil_args: nil, 5
+select_hash_nil: 2
+pass_nil_middle: 1, nil, 3

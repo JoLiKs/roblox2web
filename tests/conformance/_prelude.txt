@@ -1,0 +1,14 @@
+local function show(...)
+	local n = select("#", ...)
+	local t = {}
+	for i = 1, n do
+		local v = select(i, ...)
+		local ty = type(v)
+		t[i] = (ty == "table" or ty == "function" or ty == "thread") and ty or tostring(v)
+	end
+	return table.concat(t, ", ")
+end
+function T(name, fn)
+	local r = table.pack(pcall(fn))
+	print(name .. ": " .. (r[1] and "" or "ERR ") .. show(table.unpack(r, 2, r.n)))
+end

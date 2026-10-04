@@ -1,0 +1,2 @@
+Each *.lua file defines its own T(name, fn) helper (prints result or error) – see top of each file.
+Expected output (*.expected) is recorded from the real Luau interpreter (tools_dl/luau) by `node harness.js --record`.

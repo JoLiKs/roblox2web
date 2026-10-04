@@ -1,0 +1,49 @@
+class_a: abc, 123,  , ,
+class_w_x: hello, 1fF, A, b
+class_neg: 123, abc, abc
+class_c_g: 1, a
+dot: a, abc, a
+b
+star_plus_q: aaa, , aaa, nil, ab, b
+lazy: a, , aaab
+greedy_backtrack: abcab, abca
+anchors: a, nil, c, nil, a$b
+sets: e, h, a-, 5, ]
+set_ranges: ello, H, 9, a-
+set_classes: ab12, a_b, a
+captures: 2024, 01, 15
+capture_nested: ab, a, b
+capture_pos: 3, 5
+capture_empty: 1
+backref: abc, l, a, b
+balance: (a(b)c), [[x]], nil
+frontier: 1, HELLO WORLD, 2
+find_captures: 5, 7, o, w
+find_anchor_init: 2, nil
+match_init: a, b, b
+special_escape: 2, a+b, 1.5, a^b
+pattern_minus: a-b, b
+quantified_class: x, key, value
+trim: [hi there]
+csv: a||b|||d|
+camel: helloWorldFoo
+count_matches: 4
+gsub_anchored_pattern: Hello, hell0, 1
+bad_pattern_end: ERR ./04_patterns.lua:46: malformed pattern (ends with '%')
+bad_pattern_set: ERR ./04_patterns.lua:47: malformed pattern (missing ']')
+bad_pattern_capture: ERR ./04_patterns.lua:48: unfinished capture
+bad_pattern_close: ERR ./04_patterns.lua:49: invalid pattern capture
+bad_pattern_backref: ERR ./04_patterns.lua:50: invalid capture index %1
+bad_pattern_b: ERR ./04_patterns.lua:51: malformed pattern (missing arguments to '%b')
+bad_pattern_f: ERR ./04_patterns.lua:52: missing '[' after '%f' in pattern
+pattern_too_complex: ERR ./04_patterns.lua:53: pattern too complex
+long_input: 20000, nil
+unmatched: nil, nil, abc, 0
+multi_return_captures: k, v, z
+dot_star_greedy: a.b, c
+lua_string_functions_chain: HELLO  HELLO  
+path_split: c.txt, a/b, txt
+number_extract: 1 22 -3.5 4 2
+case_insens: HeLLo
+gsub_repl_cap_pos: 1a2b3c4, 4
+find_special_in_plain_find: ERR ./04_patterns.lua:63: unfinished capture

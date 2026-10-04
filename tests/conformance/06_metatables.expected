@@ -1,0 +1,40 @@
+index_table: hi, nil
+index_fn: foo!, 1!
+index_chain: 1, 2, nil
+index_raw_priority: own
+newindex_fn: 10
+newindex_table: nil, 1
+newindex_existing: 1, 2
+call_mm: 3
+call_mm_varargs: 0, 3
+tostring_mm: custom!, xcustom!
+tostring_bad_return: 1
+len_mm: 42
+eq_mm: true, false, false
+eq_mm_diff_types: false, false
+lt_le_mm: true, false, true, false
+arith_mm: add, sub, mul, div, mod, pow, idiv, unm
+concat_mm: cat, cat, cat
+vector_class: V(3), V(8)
+inheritance: hello from A, hello from B
+super_call: B>A.f
+getmetatable: true, nil, true
+metatable_protect: locked, false, cannot change a protected metatable
+setmetatable_nil: nil
+setmetatable_returns: true
+rawget_bypass: 1, nil
+index_nil_meta_field: nil
+proxy_readonly: 1, false, ./06_metatables.lua:42: readonly
+default_values: 1, 5, 0
+counter_proxy: 2
+class_tostring_in_print: <C>, 3
+iter_mm: 1,2,3
+call_chain: 5, true
+index_depth: nil
+newindex_chain_table: 1, nil, nil
+tostring_with_name: table
+len_rawlen: 10, 3
+arith_on_mixed_mm: 6, 6, 10
+lt_mixed_error: ERR ./06_metatables.lua:53: attempt to compare table < number
+concat_error: ERR ./06_metatables.lua:54: attempt to concatenate table with string
+method_via_index_fn: foo1, bar2
