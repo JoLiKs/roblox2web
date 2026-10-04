@@ -1291,7 +1291,31 @@ function loadProject(files) {
       buildLoose(prj, files);
     }
   }
+  applyPatches(prj);
   return prj;
+}
+// roblox2web.config.json -> "patches": [{ "script": "Shared.Config", "find": "text", "replace": "text" } | { "script": "...", "regex": "...", "flags": "g", "replace": "$1..." }]
+// Нужны, чтобы подставить в веб-демо свои значения (например демо-ID геймпассов) без правки исходников игры.
+function applyPatches(prj) {
+  const list = prj.config && Array.isArray(prj.config.patches) ? prj.config.patches : [];
+  if (!list.length) return;
+  const scripts = prj.scripts();
+  list.forEach((p, i) => {
+    const label = `patches[${i}]`;
+    if (!p || typeof p.script !== 'string' || typeof p.replace !== 'string' || (typeof p.find !== 'string' && typeof p.regex !== 'string')) { prj.warnings.push(`${label}: нужны поля script, replace и find|regex — пропущено.`); return; }
+    const targets = scripts.filter((s) => s.path === p.script || s.path.endsWith('.' + p.script));
+    if (!targets.length) { prj.warnings.push(`${label}: скрипт "${p.script}" не найден.`); return; }
+    let changed = 0;
+    for (const t of targets) {
+      let out;
+      if (typeof p.regex === 'string') {
+        let re; try { re = new RegExp(p.regex, p.flags || 'g'); } catch (e) { prj.warnings.push(`${label}: неверное регулярное выражение (${e.message}).`); return; }
+        out = t.node.source.replace(re, p.replace);
+      } else out = t.node.source.split(p.find).join(p.replace);
+      if (out !== t.node.source) { t.node.source = out; changed++; }
+    }
+    if (!changed) prj.warnings.push(`${label}: в "${p.script}" ничего не нашлось для замены.`);
+  });
 }
 function buildRojo(prj, files, base, tree) {
   const keys = Object.keys(files);
@@ -4125,6 +4149,7 @@ defClass('StarterGear', 'Instance');
 defClass('ClickDetector', 'Instance', { props: { MaxActivationDistance: 32, CursorIcon: '' }, events: ['MouseClick', 'RightMouseClick', 'MouseHoverEnter', 'MouseHoverLeave'] });
 defClass('ProximityPrompt', 'Instance', { props: { ActionText: 'Interact', ObjectText: '', HoldDuration: 0, KeyboardKeyCode: En('KeyCode','E'), GamepadKeyCode: En('KeyCode','ButtonX'), MaxActivationDistance: 10, Enabled: true, RequiresLineOfSight: true, Exclusivity: En('ProximityPromptExclusivity','OnePerButton'), ClickablePrompt: true, UIOffset: new Vector2(0, 0), Style: En('ProximityPromptStyle','Default'), AutoLocalize: true, RootLocalizationTable: undefined },
   events: ['Triggered', 'TriggerEnded', 'PromptShown', 'PromptHidden', 'PromptButtonHoldBegan', 'PromptButtonHoldEnded'] });
+defMethods('ProximityPrompt', { InputHoldBegin(self) { if (!self.props.Enabled) return E; self.fireSignal('Triggered', ENV.localPlayer); return E; }, InputHoldEnd(self) { self.fireSignal('TriggerEnded', ENV.localPlayer); return E; } });
 defMethods('ParticleEmitter', { Emit(self, n) { if (ENV.fx) ENV.fx.emit(self, n === undefined ? 1 : n); return E; }, Clear() { return E; } });
 defMethods('Explosion', {});
 
@@ -4176,6 +4201,7 @@ methods: {
   Kick(self, msg) { ENV.kick(self, msg); return E; },
   GetMouse(self) { return ENV.input ? ENV.input.mouse(self) : undefined; },
   IsFriendsWith(self, id) { return false; },
+  IsFriendsWithAsync(self, id) { return false; },
   IsInGroup() { return false; }, GetRankInGroup() { return 0; }, GetRoleInGroup() { return 'Guest'; },
   GetJoinData() { return new LuaTable(); },
   DistanceFromCharacter(self, p) { const c = self.props.Character; const r = c && c.findChild('HumanoidRootPart'); if (!r) return 0; const q = r.props.CFrame; return Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z); },
@@ -4549,7 +4575,10 @@ ENV.boot = function (opts) {
     out: (s) => ENV.log('out', 'rt', s), warn: (s) => ENV.log('warn', 'rt', s), err: (s) => ENV.log('err', 'rt', s),
   });
   rt.rngState = opts.seed !== undefined ? opts.seed : (Date.now() & 0x7fffffff);
-  ENV.epoch0 = Date.now();
+  ENV.epoch0 = opts.epoch0 !== undefined ? opts.epoch0 : Date.now();
+  // единое виртуальное время: os.clock / os.time / tick идут вместе с кадрами (детерминированные тесты, simulate())
+  rt.clockFn = () => rt.now;
+  rt.unixTime = () => ENV.epoch0 + rt.now * 1000;
   rt.onThreadError = (msg, co) => {
     const who = co && co.ctx ? co.ctx.name : 'server';
     ENV.log('err', who, msg + (co && co.script ? '' : ''));

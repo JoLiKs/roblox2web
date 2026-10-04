@@ -140,7 +140,31 @@ function loadProject(files) {
       buildLoose(prj, files);
     }
   }
+  applyPatches(prj);
   return prj;
+}
+// roblox2web.config.json -> "patches": [{ "script": "Shared.Config", "find": "text", "replace": "text" } | { "script": "...", "regex": "...", "flags": "g", "replace": "$1..." }]
+// Нужны, чтобы подставить в веб-демо свои значения (например демо-ID геймпассов) без правки исходников игры.
+function applyPatches(prj) {
+  const list = prj.config && Array.isArray(prj.config.patches) ? prj.config.patches : [];
+  if (!list.length) return;
+  const scripts = prj.scripts();
+  list.forEach((p, i) => {
+    const label = `patches[${i}]`;
+    if (!p || typeof p.script !== 'string' || typeof p.replace !== 'string' || (typeof p.find !== 'string' && typeof p.regex !== 'string')) { prj.warnings.push(`${label}: нужны поля script, replace и find|regex — пропущено.`); return; }
+    const targets = scripts.filter((s) => s.path === p.script || s.path.endsWith('.' + p.script));
+    if (!targets.length) { prj.warnings.push(`${label}: скрипт "${p.script}" не найден.`); return; }
+    let changed = 0;
+    for (const t of targets) {
+      let out;
+      if (typeof p.regex === 'string') {
+        let re; try { re = new RegExp(p.regex, p.flags || 'g'); } catch (e) { prj.warnings.push(`${label}: неверное регулярное выражение (${e.message}).`); return; }
+        out = t.node.source.replace(re, p.replace);
+      } else out = t.node.source.split(p.find).join(p.replace);
+      if (out !== t.node.source) { t.node.source = out; changed++; }
+    }
+    if (!changed) prj.warnings.push(`${label}: в "${p.script}" ничего не нашлось для замены.`);
+  });
 }
 function buildRojo(prj, files, base, tree) {
   const keys = Object.keys(files);
