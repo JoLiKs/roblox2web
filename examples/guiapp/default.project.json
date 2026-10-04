@@ -1,0 +1,8 @@
+{
+  "name": "ToolboxApp",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": { "$className": "ReplicatedStorage", "$path": "src/ReplicatedStorage" },
+    "StarterGui": { "$className": "StarterGui", "$path": "src/StarterGui" }
+  }
+}

@@ -73,8 +73,8 @@ class GuiRenderer {
     this.root = opts.root; this.doc = this.root.ownerDocument;
     this.recs = new Map(); this.roots = new Map(); this.focused = null; this.renderDirty = new Set(); this.pending = new Set();
     this.layer = this.doc.createElement('div'); this.layer.className = 'r2w-guilayer'; this.root.appendChild(this.layer);
-    this.layer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;';
-    this.bbLayer = this.doc.createElement('div'); this.bbLayer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;'; this.root.insertBefore(this.bbLayer, this.layer);
+    this.layer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;z-index:2;';
+    this.bbLayer = this.doc.createElement('div'); this.bbLayer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;z-index:1;'; this.root.insertBefore(this.bbLayer, this.layer);
     this.size();
     ENV.gui = this;
     ENV.textSizeFn = measureText;
@@ -138,7 +138,7 @@ class GuiRenderer {
         if (Math.abs(cp.x - el.scrollLeft) > 0.5 || Math.abs(cp.y - el.scrollTop) > 0.5) { i.props.CanvasPosition = new Vector2(el.scrollLeft, el.scrollTop); i.changed('CanvasPosition'); this.shiftAbs(i, rec); }
       });
     }
-    if (i.isA('TextLabel') || i.isA('TextButton')) { const t = doc.createElement('div'); t.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;overflow:hidden;pointer-events:none;'; const s = doc.createElement('span'); s.style.cssText = 'display:block;width:100%;'; t.appendChild(s); el.appendChild(t); rec.text = t; rec.span = s; rec.textHost = t; }
+    if (i.isA('TextLabel') || i.isA('TextButton') || i.isA('TextBox')) { const t = doc.createElement('div'); t.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;overflow:hidden;pointer-events:none;'; const s = doc.createElement('span'); s.style.cssText = 'display:block;width:100%;'; t.appendChild(s); el.appendChild(t); rec.text = t; rec.span = s; rec.textHost = t; }
     if (i.isA('TextBox')) { rec.input = null; }
     if (i.isA('ImageLabel') || i.isA('ImageButton')) { const im = doc.createElement('img'); im.draggable = false; im.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;'; el.appendChild(im); rec.img = im; im.style.display = 'none'; }
     if (i.isA('GuiButton')) { el.style.cursor = 'pointer'; }
@@ -267,7 +267,12 @@ class GuiRenderer {
     if (i.isA('ImageLabel') || i.isA('ImageButton')) this.styleImage(i, rec);
     if (i.className === 'ViewportFrame' || i.className === 'VideoFrame') { if (!this.warnedImages.has(i.className)) { this.warnedImages.add(i.className); noteUnsupported(i.className + ' (placeholder only)'); ENV.log('warn', 'r2w', '[unsupported] ' + i.className + ' is rendered as a placeholder'); } }
     if (i.className === 'CanvasGroup') set('opacity', String(1 - (p.GroupTransparency || 0)));
-    el.dataset.active = (p.Active || i.isA('GuiButton')) ? '1' : '';
+    const act = !!(p.Active || i.isA('GuiButton') || i.isA('TextBox') || i.className === 'ScrollingFrame');
+    const root = layout.rootOf(i); const inBB = root && root.className === 'BillboardGui';
+    const solid = (p.BackgroundTransparency || 0) < 1 || (isText && p.Text) || (i.isA('ImageLabel') && p.Image) || ['InputBegan', 'MouseEnter', 'InputEnded', 'InputChanged'].some((n) => i.hasSignal(n));
+    const pe = act || (!inBB && solid) ? 'auto' : 'none';
+    set('pointerEvents', pe);
+    el.dataset.active = (pe === 'auto' && !inBB) || act ? '1' : '';
   }
   styleScroll(i, rec) {
     const p = i.props, el = rec.el, st = el.style;

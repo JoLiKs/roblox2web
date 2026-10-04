@@ -43,7 +43,7 @@ class World3D {
     this.geoms.box = new THREE.BoxGeometry(1, 1, 1); this.geoms.sphere = new THREE.SphereGeometry(0.5, 20, 14);
     const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 24); cyl.rotateZ(Math.PI / 2); this.geoms.cyl = cyl; this.geoms.wedge = mkWedge(THREE);
     this.cam = ENV.cam = { yaw: 0.0, pitch: 0.38, dist: 14, focus: new THREE.Vector3(0, 5, 0), minDist: 0.5, maxDist: 128, shake: 0 };
-    this.labels = new Map(); this.labelLayer = document.createElement('div'); this.labelLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;'; this.container.appendChild(this.labelLayer);
+    this.labels = new Map(); this.labelLayer = document.createElement('div'); this.labelLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:0;'; this.container.appendChild(this.labelLayer);
     this.lights = new Map(); this.warned = new Set();
     this.faceTex = null;
     ENV.project = (p) => this.project(p);

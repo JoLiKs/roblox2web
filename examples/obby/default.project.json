@@ -1,0 +1,10 @@
+{
+  "name": "SkyObby",
+  "tree": {
+    "$className": "DataModel",
+    "Workspace": { "$className": "Workspace", "$ignoreUnknownInstances": true },
+    "ReplicatedStorage": { "$className": "ReplicatedStorage", "$path": "src/ReplicatedStorage" },
+    "ServerScriptService": { "$className": "ServerScriptService", "$path": "src/ServerScriptService" },
+    "StarterGui": { "$className": "StarterGui", "$path": "src/StarterGui" }
+  }
+}
