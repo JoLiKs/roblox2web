@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>roblox2web — отчёт о конвертации</title>
+<link rel="stylesheet" href="style.css">
+<style>.wrap{max-width:900px;margin:0 auto;padding:14px}.warnbox{background:#6a2020;border-radius:12px;padding:12px;margin:10px 0;line-height:1.45}pre{background:#0006;padding:8px;border-radius:8px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:.78rem}code{color:var(--gem)}li{margin:3px 0}</style>
+</head>
+<body>
+<div class="wrap">
+<h2 id="title">Отчёт о конвертации</h2>
+<div class="warnbox" id="verdict"></div>
+<h3>Что найдено</h3><div id="found"></div>
+<h3>Скрипты (<span id="nscripts"></span>)</h3><div id="scripts"></div>
+<h3>Предупреждения</h3><ul id="warns"></ul>
+<h3>Ограничения конвертера</h3><ul id="limits"></ul>
+<p class="note">Это страница-отчёт, а не игра. <span id="gen"></span></p>
+</div>
+<script src="report.js"></script>
+<script>
+(function(){
+  const R = window.R2W_REPORT; const $ = id => document.getElementById(id);
+  const li = (t, parent) => { const e = document.createElement('li'); e.textContent = t; parent.appendChild(e); };
+  $('title').textContent = 'Отчёт: ' + R.project;
+  $('verdict').textContent = R.verdict;
+  $('nscripts').textContent = R.scripts.length;
+  $('gen').textContent = R.generator;
+  const f = $('found');
+  if (!R.modules.length) f.textContent = 'Распознаваемых модулей с данными нет.';
+  R.modules.forEach(m => { const d = document.createElement('div'); d.className = 'card'; d.innerHTML = ''; const b = document.createElement('div'); b.className = 'meta';
+    const bb = document.createElement('b'); bb.textContent = m.module + (m.role ? '  →  ' + m.role : ''); b.appendChild(bb);
+    const s = document.createElement('small'); s.textContent = 'ключи: ' + m.keys.join(', '); b.appendChild(s);
+    if (m.preview) { const pre = document.createElement('pre'); pre.textContent = m.preview; b.appendChild(pre); }
+    d.appendChild(b); f.appendChild(d); });
+  const sc = $('scripts'); const ul = document.createElement('ul'); R.scripts.forEach(s => li(s[0] + ' [' + s[1] + ', ' + s[2] + ' симв.]', ul)); sc.appendChild(ul);
+  R.warnings.forEach(w => li(w, $('warns'))); if (!R.warnings.length) li('нет', $('warns'));
+  R.limitations.forEach(w => li(w, $('limits')));
+})();
+</script>
+</body>
+</html>

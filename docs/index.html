@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>roblox2web — онлайн-конвертор Roblox-проекта в веб-демо</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>roblox2web <small>онлайн, всё в браузере</small></h1>
+  <p class="lead">Перетащите архив <b>.zip</b> / <b>.tar.gz</b> с исходниками Roblox-проекта (Rojo: <code>default.project.json</code> + <code>src/</code>, или текстовый <code>.rbxlx</code>) — получите папку со статическим сайтом (zip). Файлы никуда не загружаются: всё считается у вас в браузере.</p>
+  <div class="warn">
+    <b>Честно об ограничениях.</b> Luau-код произвольной игры <b>нельзя</b> перевести в JavaScript, и этот инструмент этого не делает.
+    Он извлекает <i>данные</i> (питомцы, яйца, миры, апгрейды, баланс) и подставляет их в готовый шаблон «pet / clicker simulator».
+    Для проектов другого жанра или с незнакомой структурой вы получите только страницу-отчёт со списком найденных скриптов и данных.
+  </div>
+  <div id="drop" class="drop" tabindex="0" role="button" aria-label="Выбрать архив">
+    <div>⬆ Перетащите архив сюда или нажмите, чтобы выбрать</div>
+    <input id="file" type="file" accept=".zip,.tar,.gz,.tgz,application/zip,application/gzip" hidden>
+  </div>
+  <p><button id="sampleBtn" type="button" class="ghost">Попробовать на примере (Pet Collector Simulator, ~100 КБ)</button></p>
+  <div id="status" class="status" aria-live="polite"></div>
+  <div id="result" class="hidden">
+    <h2>Результат</h2>
+    <div id="verdict" class="verdict"></div>
+    <div class="btns">
+      <button id="dlBtn" type="button">⬇ Скачать zip</button>
+      <button id="previewBtn" type="button" class="ghost">▶ Предпросмотр</button>
+    </div>
+    <h3>Отчёт</h3>
+    <pre id="report"></pre>
+    <iframe id="preview" class="hidden" title="Предпросмотр" sandbox="allow-scripts allow-same-origin"></iframe>
+  </div>
+  <p class="foot">Версия <span id="ver"></span> · Исходники и локальный CLI: <a href="https://github.com/JoLiKs/roblox2web">github.com/JoLiKs/roblox2web</a> · JSZip (MIT) вендорен локально.</p>
+</div>
+<script src="vendor/jszip.min.js"></script>
+<script src="luau.js"></script>
+<script src="convert.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
