@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""roblox2web 2.0 — CLI. Пример: python roblox2web.py project.zip -o out/
+"""roblox2web 2.2 — CLI. Пример: python roblox2web.py project.zip -o out/
 
 Основной режим (по умолчанию): настоящий транспилятор Luau → JavaScript + браузерный эмулятор Roblox (запускает node ≥ 18, roblox2web.js).
 Резервный режим --mode template: старый шаблонный конвертор v1 (вытаскивает данные pet-симулятора и подставляет в шаблон; без Luau-кода).
@@ -30,7 +30,7 @@ def main(argv=None):
     ap.add_argument("--link", action="append", default=[], metavar="ТЕКСТ=URL", help="ссылка в подвале страницы (можно несколько)")
     ap.add_argument("--mode", choices=["auto", "transpile", "template"], default="auto",
                     help="transpile — Luau→JS (нужен node); template — резервный шаблон v1; auto — transpile, а если node нет, то template")
-    ap.add_argument("--version", action="version", version="roblox2web 2.0.0 (template-режим v" + VERSION + ")")
+    ap.add_argument("--version", action="version", version="roblox2web 2.2.0 (template-режим v" + VERSION + ")")
     a = ap.parse_args(argv)
     if a.mode != "template" and not a.serve:
         import shutil, subprocess

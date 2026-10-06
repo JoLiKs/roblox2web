@@ -1,4 +1,4 @@
-/* roblox2web 2.0 runtime — bundled from lua2js/ and rbx/ (MIT) */
+/* roblox2web 2.2 runtime — bundled from lua2js/ and rbx/ (MIT) */
 (function(){var defs={},cache={};function req(id){if(cache[id])return cache[id].exports;var m=cache[id]={exports:{}};defs[id](m,m.exports,function(p){return req(res(id,p));});return m.exports;}
 function res(from,p){var parts=from.split('/');parts.pop();p.split('/').forEach(function(s){if(s==='.'||s==='')return;if(s==='..')parts.pop();else parts.push(s);});var r=parts.join('/');if(!/\.js$/.test(r))r+='.js';return r;}
 defs["rbx/boot.js"]=function(module,exports,require){'use strict';
