@@ -1,12 +1,12 @@
-# roblox2web 2.1
+# roblox2web 2.2
 
 Конвертер Roblox-проекта (Rojo-дерево, `.rbxlx`, zip/tar.gz, каталог) в **статическую веб-версию**, которая запускает **исходный Luau-код** игры в браузере.
 
 * **Luau → JavaScript транспилятор** (`lua2js/`): собственный парсер Luau (типы, `continue`, составные присваивания, `if`-выражения, interp-строки, генерики, атрибуты) и генератор JS. Корутины Lua = JS-генераторы, строки байтовые, многозначные возвраты, метатаблицы, `pcall/error`, `string.format/pack-less` подмножество, `table.*`, `math.*`, `os.*`, `utf8`, `task.*`.
-* **Эмулятор Roblox** (`rbx/`): дерево Instance, свойства и сигналы, `Players/Workspace/ReplicatedStorage/ServerScriptService/StarterGui…`, RemoteEvent/RemoteFunction (клиент ↔ «сервер» в одной вкладке, с задержкой), DataStore (localStorage), MarketplaceService (демо-покупки), TweenService, ProximityPrompt, физика упрощённая (OBB), 3D через three.js, GUI на DOM (Frame/TextLabel/TextButton/ScrollingFrame/UIListLayout/UIGridLayout/UIScale/…), BillboardGui, ввод мыши/клавиатуры/тач.
+* **Эмулятор Roblox** (`rbx/`): дерево Instance, свойства и сигналы, `Players/Workspace/ReplicatedStorage/ServerScriptService/StarterGui…`, RemoteEvent/RemoteFunction (клиент ↔ «сервер» в одной вкладке, с задержкой), DataStore (localStorage), MarketplaceService (демо-покупки), TweenService, ProximityPrompt, физика упрощённая (OBB), 3D через three.js, GUI на DOM (Frame/TextLabel/TextButton/ScrollingFrame/UIListLayout/UIGridLayout/UIScale/…), BillboardGui, `Model:ScaleTo/GetScale` (размеры, позиции, Motor6D/Weld C0/C1, Attachment, HipHeight), NPC-риги на `Humanoid:MoveTo`, ввод мыши/клавиатуры/тач.
 * **Конвертор**: CLI (`roblox2web.js`, Node ≥ 18) и онлайн-версия (<https://joliks.github.io/roblox2web/>, всё выполняется в браузере).
 
-Пример: игра Pet Collector Simulator v2.2 (русский/английский по стране игрока) — <https://joliks.github.io/pet-collector-sim/> (её Luau-код исполняется эмулятором; это не шаблон, а те же скрипты).
+Пример: игра Pet Collector Simulator v2.3 (русский/английский по стране игрока, событие «Суперсила» с ботами-игроками) — <https://joliks.github.io/pet-collector-sim/> (её Luau-код исполняется эмулятором; это не шаблон, а те же скрипты).
 
 ## Использование
 
@@ -20,6 +20,7 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
 Коды выхода: 0 — успех, 2 — ошибка входа, 3 — `--strict` и есть неподдерживаемое.
 
 Параметры URL готовой страницы: `?quiet=1` (без шумных логов), `persist=0` (не сохранять), `seed=N`, `latency=сек` (задержка Remote), `premium=1`, `touch=1`, `autobuy=1` (демо-покупки без диалога).
+Атрибуты: `attr.Имя=значение` (или `attr_Имя=`) — до 16 атрибутов `Workspace` до запуска серверных скриптов (число, `true/false` или строка), например `?attr.SuperpowerTimeScale=6` — удобно для переключателей отладки и ускорения игровых циклов.
 Язык и страна: `country=RU` (страна для `LocalizationService:GetCountryRegionForPlayerAsync` без сетевого запроса), `lang=en` (`Player.LocaleId` = `en-us`, гео-запрос не делается, если не задан `country`), `geo=0` (не определять страну).
 
 ### LocalizationService и язык страницы
@@ -52,7 +53,7 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
 
 ```bash
 cd tests/conformance && node harness.js     # 528 кейсов, 9 файлов — результаты сверяются с эталонным интерпретатором luau
-node tests/emulator/run.js                  # 150 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, LocalizationService/гео-IP, …)
+node tests/emulator/run.js                  # 167 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, LocalizationService/гео-IP, ScaleTo, NPC MoveTo, ?attr., DescendantAdded поддерева, …)
 python3 tests/browser/test_sites.py         # Chromium: 3 синтетических проекта (obby, tycoon, GUI-приложение)
 python3 tests/browser/test_online.py        # Chromium: онлайн-конвертор
 ```
@@ -70,6 +71,12 @@ vendor/     three.min.js r149, jszip
 tests/      conformance, emulator, browser
 roblox2web.py   резервный конвертор v1 (шаблонный, только pet-sim): --mode template
 ```
+
+## Что нового в 2.2
+* `Model:ScaleTo(s)` / `Model:GetScale()`: масштаб вокруг pivot — размеры и позиции частей, `C0/C1` у Motor6D/Weld/ManualWeld/Snap, `Attachment.CFrame`, `Humanoid.HipHeight`; `ScaleTo(0)` бросает ошибку, как в Roblox.
+* Серверные NPC-риги (R6 с Motor6D) ходят через `Humanoid:MoveTo` (тест `10_scale_npc`).
+* `?attr.Имя=значение` → атрибуты `Workspace` до старта серверных скриптов (тест-директива `-- attrs:`).
+* `DescendantAdded` / `DescendantRemoving` теперь приходят для каждого потомка вставляемого поддерева, как в Roblox (раньше — только для корня; из-за этого локализаторы не видели TextLabel внутри BillboardGui, вставленного целиком).
 
 ## Честные ограничения
 

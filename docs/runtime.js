@@ -24,13 +24,22 @@ const UI_TEXT = {
 
 const chunks = []; const errors = []; let game = null; let started = false;
 const R2W = {
-  version: '2.1.0',
+  version: '2.2.0',
   chunk(id, name, factory) { ENV.chunkFactories.set(id, factory); C.ST.chunks[id] = name; chunks.push(id); },
   chunkError(id, name, msg) { errors.push({ id, name, msg }); },
   setGame(g) { game = g; R2W.game = g; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => R2W.start()); else setTimeout(() => R2W.start(), 0); },
   ENV,
 };
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// ?attr.Name=value -> Workspace attribute (number / boolean / string); only plain identifiers are accepted
+const urlAttrs = () => {
+  const out = {}; let n = 0;
+  for (const [k, v] of new URLSearchParams(location.search)) {
+    const m = /^attr[._]([A-Za-z][A-Za-z0-9_]{0,40})$/.exec(k); if (!m || n >= 16) continue;
+    out[m[1]] = v === 'true' ? true : v === 'false' ? false : (v !== '' && isFinite(+v) ? +v : String(v).slice(0, 100)); n++;
+  }
+  return out;
+};
 const qs = (k) => { const m = new RegExp('[?&]' + k + '(=([^&]*))?').exec(location.search); return m ? (m[2] === undefined ? '1' : decodeURIComponent(m[2])) : null; };
 
 R2W.start = function (opts) {
@@ -107,7 +116,7 @@ R2W.start = function (opts) {
     new GuiRenderer({ root: stage });
     w3 = new World3D({ THREE: window.THREE, container: stage, preserve: qs('preserve') === '1' });
     ENV.world3d = w3;
-    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId, localeId: geo.localeId });
+    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId, localeId: geo.localeId, attrs: urlAttrs() });
   } catch (e) {
     addLine({ level: 'err', who: 'boot', text: tx('bootError') + (e && e.stack || e) });
     cons.style.display = 'block'; finishSplash(); console.error(e); return;
@@ -981,15 +990,17 @@ class Instance extends Userdata {
     const nowIn = !!(np && np.dm) || this === ENV.game;
     // events
     if (wasIn && !nowIn) { this.walkDm(false); }
+    // Как в Roblox: DescendantAdded/DescendantRemoving приходят для самого инстанса И для каждого его потомка
+    const sub = this.children.length ? [this, ...this.descendants()] : [this];
     if (old) {
       old.fireSignal('ChildRemoved', this);
-      for (let a = old; a; a = a.parent) a.fireSignal('DescendantRemoving', this);
+      for (let a = old; a; a = a.parent) for (const d of sub) a.fireSignal('DescendantRemoving', d);
     }
     this.fireSignal('AncestryChanged', this, np);
     for (const d of this.descendants()) d.fireSignal('AncestryChanged', this, np);
     if (np) {
       np.fireSignal('ChildAdded', this);
-      for (let a = np; a; a = a.parent) a.fireSignal('DescendantAdded', this);
+      for (let a = np; a; a = a.parent) for (const d of sub) a.fireSignal('DescendantAdded', d);
       if (np.waiters) np.resolveWaiters(this);
     }
     if (!wasIn && nowIn) this.walkDm(true);
@@ -3892,6 +3903,8 @@ ENV.start = function (opts) {
   const order = [];
   const walk = (n) => { for (const c of n.children) { if (c.isA('BaseScript')) order.push(c); walk(c); } };
   for (const svc of ['ReplicatedFirst', 'Workspace', 'ServerScriptService']) { const s = ENV.svcOrNull(svc); if (s) walk(s); }
+  // Workspace attributes from the page URL (?attr.Name=value) — test/demo switches, visible to scripts from the first frame
+  if (opts.attrs) { const ws = ENV.workspace; if (!ws.attrs) ws.attrs = new Map(); for (const k of Object.keys(opts.attrs)) ws.attrs.set(k, opts.attrs[k]); }
   // server scripts first
   for (const sc of order) if (sc.className === 'Script') startScript(sc);
   // local player joins
@@ -4634,8 +4647,34 @@ defClass('Model', 'PVInstance', { props: {
   GetBoundingBox(self) { const b = bboxOf(self); return [new CFrame(b.cx, b.cy, b.cz), v3(b.sx, b.sy, b.sz)]; },
   GetExtentsSize(self) { const b = bboxOf(self); return v3(b.sx, b.sy, b.sz); },
   BreakJoints() { return E; }, MakeJoints() { return E; },
-  GetScale() { return 1; }, ScaleTo() { return E; },
+  GetScale(self) { return self.scaleFactor || 1; },
+  ScaleTo(self, s) { scaleModel(self, s); return E; },
 } });
+// Model:ScaleTo — as in Roblox: sizes/positions of parts around the pivot, joint offsets (Motor6D/Weld C0/C1),
+// attachments and Humanoid.HipHeight scale by newScale / currentScale. Character controllers re-read the rig.
+function scaleModel(self, s) {
+  if (typeof s !== 'number' || !(s > 0) || !isFinite(s)) throw rtError('Model:ScaleTo() expects a positive number');
+  const k = s / (self.scaleFactor || 1);
+  if (Math.abs(k - 1) < 1e-9) return;
+  const piv = I.modelPivot(self);
+  const sc = (c) => new CFrame(c.x * k, c.y * k, c.z * k, c.r);
+  for (const d of self.descendants()) {
+    if (d.isA('BasePart')) {
+      const c = d.props.CFrame, z = d.props.Size;
+      d.setProp('Size', v3(z.x * k, z.y * k, z.z * k));
+      setCF(d, new CFrame(piv.x + (c.x - piv.x) * k, piv.y + (c.y - piv.y) * k, piv.z + (c.z - piv.z) * k, c.r));
+    } else if (d.className === 'Motor6D' || d.className === 'Weld' || d.className === 'ManualWeld' || d.className === 'Snap') {
+      if (d.props.C0) d.setProp('C0', sc(d.props.C0));
+      if (d.props.C1) d.setProp('C1', sc(d.props.C1));
+    } else if (d.className === 'Attachment' && d.props.CFrame) {
+      d.setProp('CFrame', sc(d.props.CFrame));
+    } else if (d.className === 'Humanoid') {
+      d.setProp('HipHeight', (d.props.HipHeight || 0) * k);
+      d.ctl = null; // physics re-reads feet height / joints on the next step
+    }
+  }
+  self.scaleFactor = s;
+}
 defClass('Actor', 'Model');
 function pivotModel(self, cf) {
   const cur = I.modelPivot(self);
