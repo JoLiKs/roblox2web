@@ -518,7 +518,18 @@ CLASSES.get('GuiService').props.set('SelectedObject', { def: undefined });
 CLASSES.get('GuiService').props.set('TouchControlsEnabled', { def: true });
 CLASSES.get('GuiService').props.set('AutoSelectGuiEnabled', { def: true });
 CLASSES.get('GuiService').props.set('GuiNavigationEnabled', { def: true });
-defMethods('LocalizationService', { GetCountryRegionForPlayerAsync() { return 'US'; }, });
+// Country: real IP-geolocation started by boot.js (ENV.geo, see geo.js); headless/no geo -> 'US'.
+defMethods('LocalizationService', {
+  GetCountryRegionForPlayerAsync: function* (self, player) {
+    const g = ENV.geo;
+    if (!g) return 'US';
+    const co = CO.current;
+    const wallLimit = Date.now() + (g.budgetMs || 2000) + 1500; // geo.js enforces its own budget; this is a safety net
+    while (g.status === 'pending' && co && Date.now() < wallLimit) { ENV.rt.sleep(co, 0.05, []); yield SCHED; }
+    if (g.country) return g.country;
+    throw rtError('LocalizationService:GetCountryRegionForPlayerAsync() failed: country is unavailable (' + (g.source || g.status) + ')');
+  },
+});
 CLASSES.get('LocalizationService').props.set('RobloxLocaleId', { def: 'en-us' });
 CLASSES.get('LocalizationService').props.set('SystemLocaleId', { def: 'en-us' });
 defMethods('ContentProvider', { PreloadAsync: function* () { return E; } });

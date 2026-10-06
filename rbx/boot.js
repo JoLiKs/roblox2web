@@ -11,10 +11,17 @@ const input = require('./input');
 const { GuiRenderer } = require('./gui');
 const { World3D } = require('./world3d');
 const layout = require('./layout');
+const GEO = require('./geo');
+
+// Demo chrome strings (splash, top bar). Language = same policy as LocalizationService-based games: geo country + LocaleId.
+const UI_TEXT = {
+  ru: { loading: 'Загрузка… Luau → JS', players: 'Игроки', console: 'Консоль', reset: 'Сброс', resetTitle: 'Удалить локальные сохранения и перезапустить', resetAsk: 'Удалить сохранения этой игры из localStorage и перезапустить?', premiumTitle: 'Эмуляция Roblox Premium', bootError: 'Ошибка запуска: ' },
+  en: { loading: 'Loading… Luau → JS', players: 'Players', console: 'Console', reset: 'Reset', resetTitle: 'Delete local saves and restart', resetAsk: 'Delete this game\'s saves from localStorage and restart?', premiumTitle: 'Roblox Premium emulation', bootError: 'Startup error: ' },
+};
 
 const chunks = []; const errors = []; let game = null; let started = false;
 const R2W = {
-  version: '2.0.0',
+  version: '2.1.0',
   chunk(id, name, factory) { ENV.chunkFactories.set(id, factory); C.ST.chunks[id] = name; chunks.push(id); },
   chunkError(id, name, msg) { errors.push({ id, name, msg }); },
   setGame(g) { game = g; R2W.game = g; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => R2W.start()); else setTimeout(() => R2W.start(), 0); },
@@ -27,11 +34,16 @@ R2W.start = function (opts) {
   if (started) return; started = true;
   opts = opts || {};
   const d = document;
+  // ----- geolocation / locale (runs in parallel with loading; GetCountryRegionForPlayerAsync waits for it)
+  const geo = GEO.create({ search: location.search, navigatorLanguage: (navigator.languages && navigator.languages[0]) || navigator.language, fetch: typeof fetch === 'function' ? fetch.bind(window) : null });
+  ENV.geo = geo; R2W.geo = geo;
+  geo.start();
+  const tx = (k) => (UI_TEXT[geo.lang()] || UI_TEXT.en)[k];
   let root = d.getElementById('r2w-root');
   if (!root) { root = d.createElement('div'); root.id = 'r2w-root'; d.body.appendChild(root); }
   root.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;overflow:hidden;background:#111;font-family:system-ui,Segoe UI,Roboto,sans-serif;user-select:none;-webkit-user-select:none;';
   const splash = d.createElement('div'); splash.id = 'r2w-splash'; splash.style.cssText = 'position:absolute;inset:0;background:#1b1d21;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200000;font-size:18px;';
-  splash.innerHTML = `<div style="font-size:26px;font-weight:700;margin-bottom:8px">${esc(utf8dec(game.name || 'Game'))}</div><div style="color:#9aa">Загрузка… Luau → JS (roblox2web ${R2W.version})</div>`;
+  splash.innerHTML = `<div style="font-size:26px;font-weight:700;margin-bottom:8px">${esc(utf8dec(game.name || 'Game'))}</div><div style="color:#9aa"><span id="r2w-loading">${tx('loading')}</span> (roblox2web ${R2W.version})</div>`;
   root.appendChild(splash);
   const finishSplash = () => { splash.remove(); };
 
@@ -39,10 +51,18 @@ R2W.start = function (opts) {
   const bar = d.createElement('div'); bar.className = 'r2w-ui'; bar.id = 'r2w-bar';
   bar.style.cssText = 'position:absolute;left:0;top:0;right:0;height:36px;background:rgba(18,18,20,.72);color:#eee;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;z-index:100001;pointer-events:auto;';
   bar.innerHTML = `<b id="r2w-title" style="margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(utf8dec(game.name || ''))}</b>
-    <label style="display:flex;gap:4px;align-items:center;cursor:pointer" title="Эмуляция Roblox Premium"><input type="checkbox" id="r2w-premium"> Premium</label>
-    <button id="r2w-btn-players">Игроки</button><button id="r2w-btn-console">Консоль <span id="r2w-errcount" style="display:none;background:#c0392b;border-radius:8px;padding:0 5px"></span></button><button id="r2w-btn-reset" title="Удалить локальные сохранения и перезапустить">Сброс</button>`;
+    <label id="r2w-premium-l" style="display:flex;gap:4px;align-items:center;cursor:pointer"><input type="checkbox" id="r2w-premium"> Premium</label>
+    <button id="r2w-btn-players"></button><button id="r2w-btn-console"><span id="r2w-console-t"></span> <span id="r2w-errcount" style="display:none;background:#c0392b;border-radius:8px;padding:0 5px"></span></button><button id="r2w-btn-reset"></button>`;
   for (const b of bar.querySelectorAll('button')) b.style.cssText = 'background:#3a3d44;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;';
   root.appendChild(bar);
+  const applyChromeLang = () => {
+    d.documentElement.lang = geo.lang();
+    const set = (id, k, attr) => { const el = d.getElementById(id); if (el) { if (attr) el.setAttribute(attr, tx(k)); else el.textContent = tx(k); } };
+    set('r2w-loading', 'loading'); set('r2w-btn-players', 'players'); set('r2w-console-t', 'console'); set('r2w-btn-reset', 'reset');
+    set('r2w-btn-reset', 'resetTitle', 'title'); set('r2w-premium-l', 'premiumTitle', 'title');
+  };
+  applyChromeLang();
+  geo.onDone(() => { applyChromeLang(); if (ENV.onLog) ENV.onLog({ level: 'info', who: 'geo', text: `country=${geo.country || '?'} (${geo.source}${geo.tried.length ? ': ' + geo.tried.map((t) => t.name + (t.ok ? ' ok' : ' ' + (t.error || 'no country')) + ' ' + t.ms + 'ms').join(', ') : ''}), LocaleId=${geo.localeId}` }); });
   const cons = d.createElement('div'); cons.className = 'r2w-ui'; cons.id = 'r2w-console';
   cons.style.cssText = 'position:absolute;left:8px;right:8px;bottom:8px;height:38%;background:rgba(10,10,12,.92);color:#ddd;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;overflow:auto;padding:8px;border:1px solid #444;border-radius:8px;z-index:100002;display:none;pointer-events:auto;user-select:text;white-space:pre-wrap;';
   root.appendChild(cons);
@@ -68,7 +88,7 @@ R2W.start = function (opts) {
   for (const e of errors) addLine({ level: 'err', who: 'transpile', text: `${e.name}: ${e.msg}` });
   d.getElementById('r2w-btn-console').onclick = () => { cons.style.display = cons.style.display === 'none' ? 'block' : 'none'; };
   d.getElementById('r2w-btn-players').onclick = () => { plist.style.display = plist.style.display === 'none' ? 'block' : 'none'; };
-  d.getElementById('r2w-btn-reset').onclick = () => { if (confirm('Удалить сохранения этой игры из localStorage и перезапустить?')) { ENV.storage.clearAll(); location.reload(); } };
+  d.getElementById('r2w-btn-reset').onclick = () => { if (confirm(tx('resetAsk'))) { ENV.storage.clearAll(); location.reload(); } };
   window.addEventListener('keydown', (e) => { if (e.code === 'F9') { e.preventDefault(); cons.style.display = cons.style.display === 'none' ? 'block' : 'none'; } if (e.code === 'Tab') { plist.style.display = plist.style.display === 'none' ? 'block' : 'none'; } });
   window.addEventListener('error', (e) => addLine({ level: 'err', who: 'js', text: String(e.message) + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '') }));
   window.addEventListener('unhandledrejection', (e) => addLine({ level: 'err', who: 'js', text: 'unhandled rejection: ' + (e.reason && e.reason.stack || e.reason) }));
@@ -84,9 +104,9 @@ R2W.start = function (opts) {
     new GuiRenderer({ root: stage });
     w3 = new World3D({ THREE: window.THREE, container: stage, preserve: qs('preserve') === '1' });
     ENV.world3d = w3;
-    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId });
+    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId, localeId: geo.localeId });
   } catch (e) {
-    addLine({ level: 'err', who: 'boot', text: 'Ошибка запуска: ' + (e && e.stack || e) });
+    addLine({ level: 'err', who: 'boot', text: tx('bootError') + (e && e.stack || e) });
     cons.style.display = 'block'; finishSplash(); console.error(e); return;
   }
   d.getElementById('r2w-premium').onchange = (e) => { if (ENV.localPlayer) ENV.setPremium(ENV.localPlayer, e.target.checked); };
@@ -116,7 +136,7 @@ R2W.start = function (opts) {
   // ----- players list
   function updatePlayers() {
     if (plist.style.display === 'none') return;
-    let h = '<div style="font-weight:700;margin-bottom:4px">Игроки</div>';
+    let h = `<div style="font-weight:700;margin-bottom:4px">${tx('players')}</div>`;
     for (const p of ENV.players) {
       const ls = p.findChild('leaderstats'); let st = '';
       if (ls) for (const v of ls.children) if (v.props.Value !== undefined) st += ` <span style="color:#9fd">${esc(utf8dec(v.props.Name))}: ${esc(utf8dec(String(v.props.Value)))}</span>`;

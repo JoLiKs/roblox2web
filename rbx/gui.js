@@ -362,12 +362,15 @@ class GuiRenderer {
     ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000;pointer-events:auto;font-family:system-ui,Segoe UI,sans-serif;';
     const box = d.createElement('div');
     box.style.cssText = 'background:#232527;color:#fff;border-radius:12px;padding:20px 24px;width:min(380px,90%);box-shadow:0 10px 40px #000a;text-align:center;border:1px solid #444;';
-    const kind = { gamepass: 'Геймпасс', product: 'Покупка', asset: 'Предмет', premium: 'Roblox Premium' }[info.kind] || 'Покупка';
+    const ru = !ENV.geo || ENV.geo.lang() === 'ru'; // demo chrome language (geo.js); headless default: ru
+    const T = ru ? { gamepass: 'Геймпасс', product: 'Покупка', asset: 'Предмет', demo: 'Демо · деньги не списываются', cancel: 'Отмена', buy: 'Купить (демо)' }
+      : { gamepass: 'Game pass', product: 'Purchase', asset: 'Item', demo: 'Demo · no real money is charged', cancel: 'Cancel', buy: 'Buy (demo)' };
+    const kind = { gamepass: T.gamepass, product: T.product, asset: T.asset, premium: 'Roblox Premium' }[info.kind] || T.product;
     const price = info.price ? `<div style="font-size:22px;margin:10px 0;color:#00b06f;font-weight:700">R$ ${info.price}</div>` : '';
-    box.innerHTML = `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#f5a623;font-weight:700">Демо · деньги не списываются</div><div style="font-size:13px;color:#aaa;margin-top:8px">${kind}</div><div style="font-size:19px;font-weight:700;margin:4px 0">${esc(utf8dec(info.name || ''))}</div>${info.description ? `<div style="font-size:13px;color:#bbb">${esc(utf8dec(info.description))}</div>` : ''}${price}`;
+    box.innerHTML = `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#f5a623;font-weight:700">${T.demo}</div><div style="font-size:13px;color:#aaa;margin-top:8px">${kind}</div><div style="font-size:19px;font-weight:700;margin:4px 0">${esc(utf8dec(info.name || ''))}</div>${info.description ? `<div style="font-size:13px;color:#bbb">${esc(utf8dec(info.description))}</div>` : ''}${price}`;
     const row = d.createElement('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;margin-top:14px';
     const mk = (t, bg, fn, id) => { const b = d.createElement('button'); b.textContent = t; b.id = id; b.style.cssText = `background:${bg};color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:15px;font-weight:700;cursor:pointer;`; b.onclick = () => { ov.remove(); fn(); }; return b; };
-    row.appendChild(mk('Отмена', '#555', () => cb(false), 'r2w-buy-cancel')); row.appendChild(mk('Купить (демо)', '#00a35c', () => cb(true), 'r2w-buy-ok'));
+    row.appendChild(mk(T.cancel, '#555', () => cb(false), 'r2w-buy-cancel')); row.appendChild(mk(T.buy, '#00a35c', () => cb(true), 'r2w-buy-ok'));
     box.appendChild(row); ov.appendChild(box); this.root.appendChild(ov);
   }
 }

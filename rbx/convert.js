@@ -6,7 +6,7 @@ const P = require('./project');
 const D = require('./datatypes');
 const I = require('./instance');
 const { CLASSES } = I;
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 
 const SVC_LIBS = new Set(['string', 'table', 'math', 'os', 'bit32', 'utf8', 'coroutine', 'debug', 'task']);
 let supportedCache = null;

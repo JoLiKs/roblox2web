@@ -47,7 +47,7 @@ const P = require('./project');
 const D = require('./datatypes');
 const I = require('./instance');
 const { CLASSES } = I;
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 
 const SVC_LIBS = new Set(['string', 'table', 'math', 'os', 'bit32', 'utf8', 'coroutine', 'debug', 'task']);
 let supportedCache = null;
@@ -4614,7 +4614,8 @@ ENV.start = function (opts) {
   // local player joins
   if (opts.player !== false) {
     const nm = opts.playerName || 'Player1';
-    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId });
+    if (opts.localeId) { const ls = ENV.getService('LocalizationService'); ls.props.RobloxLocaleId = opts.localeId; ls.props.SystemLocaleId = opts.localeId; }
+    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId, localeId: opts.localeId });
   }
   // ReplicatedFirst local scripts
   const rf = ENV.svcOrNull('ReplicatedFirst');
@@ -5173,7 +5174,18 @@ CLASSES.get('GuiService').props.set('SelectedObject', { def: undefined });
 CLASSES.get('GuiService').props.set('TouchControlsEnabled', { def: true });
 CLASSES.get('GuiService').props.set('AutoSelectGuiEnabled', { def: true });
 CLASSES.get('GuiService').props.set('GuiNavigationEnabled', { def: true });
-defMethods('LocalizationService', { GetCountryRegionForPlayerAsync() { return 'US'; }, });
+// Country: real IP-geolocation started by boot.js (ENV.geo, see geo.js); headless/no geo -> 'US'.
+defMethods('LocalizationService', {
+  GetCountryRegionForPlayerAsync: function* (self, player) {
+    const g = ENV.geo;
+    if (!g) return 'US';
+    const co = CO.current;
+    const wallLimit = Date.now() + (g.budgetMs || 2000) + 1500; // geo.js enforces its own budget; this is a safety net
+    while (g.status === 'pending' && co && Date.now() < wallLimit) { ENV.rt.sleep(co, 0.05, []); yield SCHED; }
+    if (g.country) return g.country;
+    throw rtError('LocalizationService:GetCountryRegionForPlayerAsync() failed: country is unavailable (' + (g.source || g.status) + ')');
+  },
+});
 CLASSES.get('LocalizationService').props.set('RobloxLocaleId', { def: 'en-us' });
 CLASSES.get('LocalizationService').props.set('SystemLocaleId', { def: 'en-us' });
 defMethods('ContentProvider', { PreloadAsync: function* () { return E; } });
@@ -5397,6 +5409,7 @@ ENV.addPlayer = function (name, opts) {
   pl.props.UserId = opts.userId || nextUserId++;
   pl.props.AccountAge = opts.accountAge === undefined ? 365 : opts.accountAge;
   pl.props.MembershipType = En('MembershipType', opts.premium ? 'Premium' : 'None');
+  if (opts.localeId) pl.props.LocaleId = String(opts.localeId);
   pl.shirt = SHIRTS[(pl.props.UserId) % SHIRTS.length];
   pl.isLocal = !!opts.isLocal;
   pl.setParent(playersSvc);
@@ -5467,6 +5480,17 @@ ENV.buildRig = function (name, shirt, skin) {
   mkPart('Left Leg', v3(1, 2, 1), v3(-0.5, -2, 0), pants, m); mkPart('Right Leg', v3(1, 2, 1), v3(0.5, -2, 0), pants, m);
   const h = newInstance('Humanoid'); h.props.HipHeight = 0; h.props.RigType = En('HumanoidRigType', 'R6'); h.setParent(m);
   m.props.PrimaryPart = hrp;
+  // Standard R6 joints (same names / C0 / C1 as a real Roblox R6 character): scripts can animate limbs via Motor6D.C0 / Transform.
+  const torso = m.findChild('Torso');
+  const R = (a) => a; const cf = (x, y, z, r) => new CFrame(x, y, z, r);
+  const RS = [0, 0, 1, 0, 1, 0, -1, 0, 0], LS = [0, 0, -1, 0, 1, 0, 1, 0, 0], NK = [-1, 0, 0, 0, 0, 1, 0, 1, 0];
+  const motor = (name, parent, p0, p1, c0, c1) => { const j = newInstance('Motor6D'); j.props.Name = name; j.props.Part0 = p0; j.props.Part1 = p1; j.props.C0 = c0; j.props.C1 = c1; j.setParent(parent); return j; };
+  motor('RootJoint', hrp, hrp, torso, cf(0, 0, 0, NK), cf(0, 0, 0, NK));
+  motor('Right Shoulder', torso, torso, m.findChild('Right Arm'), cf(1, 0.5, 0, R(RS)), cf(-0.5, 0.5, 0, RS));
+  motor('Left Shoulder', torso, torso, m.findChild('Left Arm'), cf(-1, 0.5, 0, LS), cf(0.5, 0.5, 0, LS));
+  motor('Right Hip', torso, torso, m.findChild('Right Leg'), cf(1, -1, 0, RS), cf(0.5, 1, 0, RS));
+  motor('Left Hip', torso, torso, m.findChild('Left Leg'), cf(-1, -1, 0, LS), cf(-0.5, 1, 0, LS));
+  motor('Neck', torso, torso, m.findChild('Head'), cf(0, 1, 0, NK), cf(0, -0.5, 0, NK));
   return m;
 };
 ENV.character = {
@@ -5837,10 +5861,25 @@ function setupCtl(h) {
   const ctl = { m, hrp, r6, feet, top: r6 ? 2 : hrp.props.Size.y / 2 + 1.5, pos: [cf.x, cf.y, cf.z], yaw: Math.atan2(-cf.r[2], cf.r[8]) || 0, vy: 0, vx: 0, vz: 0, grounded: false, lastCF: cf, floor: null, floorCF: null, t: 0, phase: 0, swing: 0, dead: false, deathT: 0, moveT: 0, jumpReq: false, rec: world.parts.get(hrp), parts: null, restPose: false, airT: 0 };
   if (cf.r) { const fy = D.eulerYXZ(cf.r); ctl.yaw = fy[1]; }
   ctl.parts = {}; for (const n of ['Torso', 'Head', 'Left Arm', 'Right Arm', 'Left Leg', 'Right Leg']) { const p = m.findChild(n); if (p) ctl.parts[n] = p; }
+  ctl.motors = findMotors(m, ctl);
   ctl.rel = new Map();
   const inv = D.cfInverse(cf);
   for (const p of m.descendants()) if (p.isA('BasePart')) { p.charPart = true; const r = world.parts.get(p); if (r) r.inCtl = true; if (!r6 && p !== hrp) ctl.rel.set(p, D.cfMul(inv, p.props.CFrame)); }
   h.ctl = ctl; return ctl;
+}
+// R6 Motor6D joints (if present): limb = Part0 * C0 * anim * Transform * C1^-1 — scripts can tween C0 / set Transform.
+function findMotors(m, ctl) {
+  const out = {}; let n = 0;
+  for (const d of m.descendants()) if (d.className === 'Motor6D' && d.props.Part1) { out[d.props.Name] = d; n++; }
+  if (!out.RootJoint || !out['Right Shoulder']) return null;
+  return n ? out : null;
+}
+function rotZ(a) { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; }
+function motorCF(j, base, ang) {
+  const p = j.props; let t = p.C0;
+  if (ang) t = D.cfMul(t, new CFrame(0, 0, 0, rotZ(ang)));
+  if (p.Transform) t = D.cfMul(t, p.Transform);
+  return D.cfMul(D.cfMul(base, t), D.cfInverse(p.C1));
 }
 function ctlBox(ctl) {
   const c = ctl; const cy = c.pos[1] - c.feet + (c.feet + c.top) / 2, hy = (c.feet + c.top) / 2;
@@ -5866,6 +5905,18 @@ function poseRig(ctl, swing, air, fall) {
   setPart(ctl.hrp, root);
   if (!ctl.r6) { for (const [p, rel] of ctl.rel) if (!p.destroyed) setPart(p, D.cfMul(root, rel)); return; }
   const P = ctl.parts;
+  if (!ctl.motors && ((ctl.motorScan = (ctl.motorScan || 0) + 1) % 30 === 1)) ctl.motors = findMotors(ctl.m, ctl);
+  const M = ctl.motors;
+  if (M && !M.RootJoint.destroyed) {
+    const a = swing * 0.9;
+    const torsoCF = motorCF(M.RootJoint, root, 0);
+    if (P.Torso) setPart(P.Torso, torsoCF);
+    const joint = (name, ang) => { const j = M[name]; if (j && !j.destroyed && j.props.Part1 && !j.props.Part1.destroyed) setPart(j.props.Part1, motorCF(j, torsoCF, ang)); };
+    joint('Neck', 0);
+    joint('Right Shoulder', air ? 2.8 : -a); joint('Left Shoulder', air ? -2.8 : -a);
+    joint('Right Hip', air ? -0.35 : a); joint('Left Hip', air ? -0.35 : a);
+    return;
+  }
   const put = (name, cf) => { if (P[name]) setPart(P[name], D.cfMul(root, cf)); };
   put('Torso', new CFrame(0, 0, 0)); put('Head', new CFrame(0, 1.5, 0));
   const a = swing * 0.9;

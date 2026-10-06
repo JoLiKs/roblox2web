@@ -54,6 +54,7 @@ ENV.addPlayer = function (name, opts) {
   pl.props.UserId = opts.userId || nextUserId++;
   pl.props.AccountAge = opts.accountAge === undefined ? 365 : opts.accountAge;
   pl.props.MembershipType = En('MembershipType', opts.premium ? 'Premium' : 'None');
+  if (opts.localeId) pl.props.LocaleId = String(opts.localeId);
   pl.shirt = SHIRTS[(pl.props.UserId) % SHIRTS.length];
   pl.isLocal = !!opts.isLocal;
   pl.setParent(playersSvc);

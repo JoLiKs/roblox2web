@@ -1,4 +1,4 @@
-# roblox2web 2.0
+# roblox2web 2.1
 
 Конвертер Roblox-проекта (Rojo-дерево, `.rbxlx`, zip/tar.gz, каталог) в **статическую веб-версию**, которая запускает **исходный Luau-код** игры в браузере.
 
@@ -6,7 +6,7 @@
 * **Эмулятор Roblox** (`rbx/`): дерево Instance, свойства и сигналы, `Players/Workspace/ReplicatedStorage/ServerScriptService/StarterGui…`, RemoteEvent/RemoteFunction (клиент ↔ «сервер» в одной вкладке, с задержкой), DataStore (localStorage), MarketplaceService (демо-покупки), TweenService, ProximityPrompt, физика упрощённая (OBB), 3D через three.js, GUI на DOM (Frame/TextLabel/TextButton/ScrollingFrame/UIListLayout/UIGridLayout/UIScale/…), BillboardGui, ввод мыши/клавиатуры/тач.
 * **Конвертор**: CLI (`roblox2web.js`, Node ≥ 18) и онлайн-версия (<https://joliks.github.io/roblox2web/>, всё выполняется в браузере).
 
-Пример: игра Pet Collector Simulator v2 — <https://joliks.github.io/pet-collector-sim/> (её Luau-код исполняется эмулятором; это не шаблон, а те же скрипты).
+Пример: игра Pet Collector Simulator v2.2 (русский/английский по стране игрока) — <https://joliks.github.io/pet-collector-sim/> (её Luau-код исполняется эмулятором; это не шаблон, а те же скрипты).
 
 ## Использование
 
@@ -20,6 +20,14 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
 Коды выхода: 0 — успех, 2 — ошибка входа, 3 — `--strict` и есть неподдерживаемое.
 
 Параметры URL готовой страницы: `?quiet=1` (без шумных логов), `persist=0` (не сохранять), `seed=N`, `latency=сек` (задержка Remote), `premium=1`, `touch=1`, `autobuy=1` (демо-покупки без диалога).
+Язык и страна: `country=RU` (страна для `LocalizationService:GetCountryRegionForPlayerAsync` без сетевого запроса), `lang=en` (`Player.LocaleId` = `en-us`, гео-запрос не делается, если не задан `country`), `geo=0` (не определять страну).
+
+### LocalizationService и язык страницы
+
+* `GetCountryRegionForPlayerAsync` возвращает **реальную страну по IP**: при старте страницы эмулятор по очереди опрашивает бесплатные сервисы без ключей, которые отдают CORS-заголовок `Access-Control-Allow-Origin: *`: `https://www.cloudflare.com/cdn-cgi/trace` (поле `loc=`) → `https://get.geojs.io/v1/ip/country` → `https://api.country.is/` → `https://ipapi.co/country/` (у последнего жёсткий лимит запросов). Общий бюджет ~2 с (на сервис ≤1.2 с); вызов из Luau ждёт результата. Если ни один не ответил — вызов **бросает ошибку**, как на Roblox при сбое (игры оборачивают его в `pcall` и берут `LocaleId`).
+* `Player.LocaleId`, `LocalizationService.RobloxLocaleId/SystemLocaleId` — из `navigator.language` (`ru-RU` → `ru-ru`).
+* Сплэш, верхняя панель и диалог демо-покупки показываются на языке по тому же правилу (страны СНГ из списка RU/BY/KZ/KG/AM/AZ/MD/TJ/UZ/TM → русский; UA — русский только при русском языке браузера; иначе английский; страна неизвестна → язык браузера). В консоли эмулятора (F9) пишется строка `[geo]` с результатом и временем каждого сервиса.
+* В headless-режиме (node, тесты) сети нет: страна `US`, если тест не передал свой `geo` (`runProject(files, { geo })`).
 
 ### roblox2web.config.json (необязательно, в корне проекта)
 
@@ -44,7 +52,7 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
 
 ```bash
 cd tests/conformance && node harness.js     # 528 кейсов, 9 файлов — результаты сверяются с эталонным интерпретатором luau
-node tests/emulator/run.js                  # 129 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, …)
+node tests/emulator/run.js                  # 150 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, LocalizationService/гео-IP, …)
 python3 tests/browser/test_sites.py         # Chromium: 3 синтетических проекта (obby, tycoon, GUI-приложение)
 python3 tests/browser/test_online.py        # Chromium: онлайн-конвертор
 ```
@@ -73,6 +81,7 @@ roblox2web.py   резервный конвертор v1 (шаблонный, т
 * Нет `string.pack/unpack`, `buffer`; `loadstring` минимален; скрипты не прерываются при `Destroy`.
 * Время в эмуляторе виртуальное (идёт по кадрам) — `os.time()/os.clock()/tick()` детерминированы.
 * Покупки и DataStore — демо (localStorage), настоящих платежей нет.
+* Страна для `LocalizationService` берётся у сторонних бесплатных гео-IP-сервисов (Cloudflare, geojs.io, country.is, ipapi.co): они видят IP посетителя, могут ограничивать частоту, блокироваться расширениями/корпоративными сетями и ошибаться для VPN; тогда используется язык браузера. Отключить — `?geo=0`.
 * Проверено в Chromium (headless, swiftshader); Firefox/Safari и реальные мобильные устройства вручную не проверялись.
 
 Лицензия: MIT (three.js — MIT, JSZip — MIT/GPL, используется как MIT).

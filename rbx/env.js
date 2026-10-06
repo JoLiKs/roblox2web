@@ -315,7 +315,8 @@ ENV.start = function (opts) {
   // local player joins
   if (opts.player !== false) {
     const nm = opts.playerName || 'Player1';
-    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId });
+    if (opts.localeId) { const ls = ENV.getService('LocalizationService'); ls.props.RobloxLocaleId = opts.localeId; ls.props.SystemLocaleId = opts.localeId; }
+    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId, localeId: opts.localeId });
   }
   // ReplicatedFirst local scripts
   const rf = ENV.svcOrNull('ReplicatedFirst');

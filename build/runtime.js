@@ -14,10 +14,17 @@ const input = require('./input');
 const { GuiRenderer } = require('./gui');
 const { World3D } = require('./world3d');
 const layout = require('./layout');
+const GEO = require('./geo');
+
+// Demo chrome strings (splash, top bar). Language = same policy as LocalizationService-based games: geo country + LocaleId.
+const UI_TEXT = {
+  ru: { loading: 'Загрузка… Luau → JS', players: 'Игроки', console: 'Консоль', reset: 'Сброс', resetTitle: 'Удалить локальные сохранения и перезапустить', resetAsk: 'Удалить сохранения этой игры из localStorage и перезапустить?', premiumTitle: 'Эмуляция Roblox Premium', bootError: 'Ошибка запуска: ' },
+  en: { loading: 'Loading… Luau → JS', players: 'Players', console: 'Console', reset: 'Reset', resetTitle: 'Delete local saves and restart', resetAsk: 'Delete this game\'s saves from localStorage and restart?', premiumTitle: 'Roblox Premium emulation', bootError: 'Startup error: ' },
+};
 
 const chunks = []; const errors = []; let game = null; let started = false;
 const R2W = {
-  version: '2.0.0',
+  version: '2.1.0',
   chunk(id, name, factory) { ENV.chunkFactories.set(id, factory); C.ST.chunks[id] = name; chunks.push(id); },
   chunkError(id, name, msg) { errors.push({ id, name, msg }); },
   setGame(g) { game = g; R2W.game = g; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => R2W.start()); else setTimeout(() => R2W.start(), 0); },
@@ -30,11 +37,16 @@ R2W.start = function (opts) {
   if (started) return; started = true;
   opts = opts || {};
   const d = document;
+  // ----- geolocation / locale (runs in parallel with loading; GetCountryRegionForPlayerAsync waits for it)
+  const geo = GEO.create({ search: location.search, navigatorLanguage: (navigator.languages && navigator.languages[0]) || navigator.language, fetch: typeof fetch === 'function' ? fetch.bind(window) : null });
+  ENV.geo = geo; R2W.geo = geo;
+  geo.start();
+  const tx = (k) => (UI_TEXT[geo.lang()] || UI_TEXT.en)[k];
   let root = d.getElementById('r2w-root');
   if (!root) { root = d.createElement('div'); root.id = 'r2w-root'; d.body.appendChild(root); }
   root.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;overflow:hidden;background:#111;font-family:system-ui,Segoe UI,Roboto,sans-serif;user-select:none;-webkit-user-select:none;';
   const splash = d.createElement('div'); splash.id = 'r2w-splash'; splash.style.cssText = 'position:absolute;inset:0;background:#1b1d21;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200000;font-size:18px;';
-  splash.innerHTML = `<div style="font-size:26px;font-weight:700;margin-bottom:8px">${esc(utf8dec(game.name || 'Game'))}</div><div style="color:#9aa">Загрузка… Luau → JS (roblox2web ${R2W.version})</div>`;
+  splash.innerHTML = `<div style="font-size:26px;font-weight:700;margin-bottom:8px">${esc(utf8dec(game.name || 'Game'))}</div><div style="color:#9aa"><span id="r2w-loading">${tx('loading')}</span> (roblox2web ${R2W.version})</div>`;
   root.appendChild(splash);
   const finishSplash = () => { splash.remove(); };
 
@@ -42,10 +54,18 @@ R2W.start = function (opts) {
   const bar = d.createElement('div'); bar.className = 'r2w-ui'; bar.id = 'r2w-bar';
   bar.style.cssText = 'position:absolute;left:0;top:0;right:0;height:36px;background:rgba(18,18,20,.72);color:#eee;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:13px;z-index:100001;pointer-events:auto;';
   bar.innerHTML = `<b id="r2w-title" style="margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(utf8dec(game.name || ''))}</b>
-    <label style="display:flex;gap:4px;align-items:center;cursor:pointer" title="Эмуляция Roblox Premium"><input type="checkbox" id="r2w-premium"> Premium</label>
-    <button id="r2w-btn-players">Игроки</button><button id="r2w-btn-console">Консоль <span id="r2w-errcount" style="display:none;background:#c0392b;border-radius:8px;padding:0 5px"></span></button><button id="r2w-btn-reset" title="Удалить локальные сохранения и перезапустить">Сброс</button>`;
+    <label id="r2w-premium-l" style="display:flex;gap:4px;align-items:center;cursor:pointer"><input type="checkbox" id="r2w-premium"> Premium</label>
+    <button id="r2w-btn-players"></button><button id="r2w-btn-console"><span id="r2w-console-t"></span> <span id="r2w-errcount" style="display:none;background:#c0392b;border-radius:8px;padding:0 5px"></span></button><button id="r2w-btn-reset"></button>`;
   for (const b of bar.querySelectorAll('button')) b.style.cssText = 'background:#3a3d44;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;';
   root.appendChild(bar);
+  const applyChromeLang = () => {
+    d.documentElement.lang = geo.lang();
+    const set = (id, k, attr) => { const el = d.getElementById(id); if (el) { if (attr) el.setAttribute(attr, tx(k)); else el.textContent = tx(k); } };
+    set('r2w-loading', 'loading'); set('r2w-btn-players', 'players'); set('r2w-console-t', 'console'); set('r2w-btn-reset', 'reset');
+    set('r2w-btn-reset', 'resetTitle', 'title'); set('r2w-premium-l', 'premiumTitle', 'title');
+  };
+  applyChromeLang();
+  geo.onDone(() => { applyChromeLang(); if (ENV.onLog) ENV.onLog({ level: 'info', who: 'geo', text: `country=${geo.country || '?'} (${geo.source}${geo.tried.length ? ': ' + geo.tried.map((t) => t.name + (t.ok ? ' ok' : ' ' + (t.error || 'no country')) + ' ' + t.ms + 'ms').join(', ') : ''}), LocaleId=${geo.localeId}` }); });
   const cons = d.createElement('div'); cons.className = 'r2w-ui'; cons.id = 'r2w-console';
   cons.style.cssText = 'position:absolute;left:8px;right:8px;bottom:8px;height:38%;background:rgba(10,10,12,.92);color:#ddd;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;overflow:auto;padding:8px;border:1px solid #444;border-radius:8px;z-index:100002;display:none;pointer-events:auto;user-select:text;white-space:pre-wrap;';
   root.appendChild(cons);
@@ -71,7 +91,7 @@ R2W.start = function (opts) {
   for (const e of errors) addLine({ level: 'err', who: 'transpile', text: `${e.name}: ${e.msg}` });
   d.getElementById('r2w-btn-console').onclick = () => { cons.style.display = cons.style.display === 'none' ? 'block' : 'none'; };
   d.getElementById('r2w-btn-players').onclick = () => { plist.style.display = plist.style.display === 'none' ? 'block' : 'none'; };
-  d.getElementById('r2w-btn-reset').onclick = () => { if (confirm('Удалить сохранения этой игры из localStorage и перезапустить?')) { ENV.storage.clearAll(); location.reload(); } };
+  d.getElementById('r2w-btn-reset').onclick = () => { if (confirm(tx('resetAsk'))) { ENV.storage.clearAll(); location.reload(); } };
   window.addEventListener('keydown', (e) => { if (e.code === 'F9') { e.preventDefault(); cons.style.display = cons.style.display === 'none' ? 'block' : 'none'; } if (e.code === 'Tab') { plist.style.display = plist.style.display === 'none' ? 'block' : 'none'; } });
   window.addEventListener('error', (e) => addLine({ level: 'err', who: 'js', text: String(e.message) + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '') }));
   window.addEventListener('unhandledrejection', (e) => addLine({ level: 'err', who: 'js', text: 'unhandled rejection: ' + (e.reason && e.reason.stack || e.reason) }));
@@ -87,9 +107,9 @@ R2W.start = function (opts) {
     new GuiRenderer({ root: stage });
     w3 = new World3D({ THREE: window.THREE, container: stage, preserve: qs('preserve') === '1' });
     ENV.world3d = w3;
-    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId });
+    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId, localeId: geo.localeId });
   } catch (e) {
-    addLine({ level: 'err', who: 'boot', text: 'Ошибка запуска: ' + (e && e.stack || e) });
+    addLine({ level: 'err', who: 'boot', text: tx('bootError') + (e && e.stack || e) });
     cons.style.display = 'block'; finishSplash(); console.error(e); return;
   }
   d.getElementById('r2w-premium').onchange = (e) => { if (ENV.localPlayer) ENV.setPremium(ENV.localPlayer, e.target.checked); };
@@ -119,7 +139,7 @@ R2W.start = function (opts) {
   // ----- players list
   function updatePlayers() {
     if (plist.style.display === 'none') return;
-    let h = '<div style="font-weight:700;margin-bottom:4px">Игроки</div>';
+    let h = `<div style="font-weight:700;margin-bottom:4px">${tx('players')}</div>`;
     for (const p of ENV.players) {
       const ls = p.findChild('leaderstats'); let st = '';
       if (ls) for (const v of ls.children) if (v.props.Value !== undefined) st += ` <span style="color:#9fd">${esc(utf8dec(v.props.Name))}: ${esc(utf8dec(String(v.props.Value)))}</span>`;
@@ -3877,7 +3897,8 @@ ENV.start = function (opts) {
   // local player joins
   if (opts.player !== false) {
     const nm = opts.playerName || 'Player1';
-    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId });
+    if (opts.localeId) { const ls = ENV.getService('LocalizationService'); ls.props.RobloxLocaleId = opts.localeId; ls.props.SystemLocaleId = opts.localeId; }
+    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId, localeId: opts.localeId });
   }
   // ReplicatedFirst local scripts
   const rf = ENV.svcOrNull('ReplicatedFirst');
@@ -4436,7 +4457,18 @@ CLASSES.get('GuiService').props.set('SelectedObject', { def: undefined });
 CLASSES.get('GuiService').props.set('TouchControlsEnabled', { def: true });
 CLASSES.get('GuiService').props.set('AutoSelectGuiEnabled', { def: true });
 CLASSES.get('GuiService').props.set('GuiNavigationEnabled', { def: true });
-defMethods('LocalizationService', { GetCountryRegionForPlayerAsync() { return 'US'; }, });
+// Country: real IP-geolocation started by boot.js (ENV.geo, see geo.js); headless/no geo -> 'US'.
+defMethods('LocalizationService', {
+  GetCountryRegionForPlayerAsync: function* (self, player) {
+    const g = ENV.geo;
+    if (!g) return 'US';
+    const co = CO.current;
+    const wallLimit = Date.now() + (g.budgetMs || 2000) + 1500; // geo.js enforces its own budget; this is a safety net
+    while (g.status === 'pending' && co && Date.now() < wallLimit) { ENV.rt.sleep(co, 0.05, []); yield SCHED; }
+    if (g.country) return g.country;
+    throw rtError('LocalizationService:GetCountryRegionForPlayerAsync() failed: country is unavailable (' + (g.source || g.status) + ')');
+  },
+});
 CLASSES.get('LocalizationService').props.set('RobloxLocaleId', { def: 'en-us' });
 CLASSES.get('LocalizationService').props.set('SystemLocaleId', { def: 'en-us' });
 defMethods('ContentProvider', { PreloadAsync: function* () { return E; } });
@@ -5005,6 +5037,7 @@ ENV.addPlayer = function (name, opts) {
   pl.props.UserId = opts.userId || nextUserId++;
   pl.props.AccountAge = opts.accountAge === undefined ? 365 : opts.accountAge;
   pl.props.MembershipType = En('MembershipType', opts.premium ? 'Premium' : 'None');
+  if (opts.localeId) pl.props.LocaleId = String(opts.localeId);
   pl.shirt = SHIRTS[(pl.props.UserId) % SHIRTS.length];
   pl.isLocal = !!opts.isLocal;
   pl.setParent(playersSvc);
@@ -6662,12 +6695,15 @@ class GuiRenderer {
     ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000;pointer-events:auto;font-family:system-ui,Segoe UI,sans-serif;';
     const box = d.createElement('div');
     box.style.cssText = 'background:#232527;color:#fff;border-radius:12px;padding:20px 24px;width:min(380px,90%);box-shadow:0 10px 40px #000a;text-align:center;border:1px solid #444;';
-    const kind = { gamepass: 'Геймпасс', product: 'Покупка', asset: 'Предмет', premium: 'Roblox Premium' }[info.kind] || 'Покупка';
+    const ru = !ENV.geo || ENV.geo.lang() === 'ru'; // demo chrome language (geo.js); headless default: ru
+    const T = ru ? { gamepass: 'Геймпасс', product: 'Покупка', asset: 'Предмет', demo: 'Демо · деньги не списываются', cancel: 'Отмена', buy: 'Купить (демо)' }
+      : { gamepass: 'Game pass', product: 'Purchase', asset: 'Item', demo: 'Demo · no real money is charged', cancel: 'Cancel', buy: 'Buy (demo)' };
+    const kind = { gamepass: T.gamepass, product: T.product, asset: T.asset, premium: 'Roblox Premium' }[info.kind] || T.product;
     const price = info.price ? `<div style="font-size:22px;margin:10px 0;color:#00b06f;font-weight:700">R$ ${info.price}</div>` : '';
-    box.innerHTML = `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#f5a623;font-weight:700">Демо · деньги не списываются</div><div style="font-size:13px;color:#aaa;margin-top:8px">${kind}</div><div style="font-size:19px;font-weight:700;margin:4px 0">${esc(utf8dec(info.name || ''))}</div>${info.description ? `<div style="font-size:13px;color:#bbb">${esc(utf8dec(info.description))}</div>` : ''}${price}`;
+    box.innerHTML = `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#f5a623;font-weight:700">${T.demo}</div><div style="font-size:13px;color:#aaa;margin-top:8px">${kind}</div><div style="font-size:19px;font-weight:700;margin:4px 0">${esc(utf8dec(info.name || ''))}</div>${info.description ? `<div style="font-size:13px;color:#bbb">${esc(utf8dec(info.description))}</div>` : ''}${price}`;
     const row = d.createElement('div'); row.style.cssText = 'display:flex;gap:10px;justify-content:center;margin-top:14px';
     const mk = (t, bg, fn, id) => { const b = d.createElement('button'); b.textContent = t; b.id = id; b.style.cssText = `background:${bg};color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:15px;font-weight:700;cursor:pointer;`; b.onclick = () => { ov.remove(); fn(); }; return b; };
-    row.appendChild(mk('Отмена', '#555', () => cb(false), 'r2w-buy-cancel')); row.appendChild(mk('Купить (демо)', '#00a35c', () => cb(true), 'r2w-buy-ok'));
+    row.appendChild(mk(T.cancel, '#555', () => cb(false), 'r2w-buy-cancel')); row.appendChild(mk(T.buy, '#00a35c', () => cb(true), 'r2w-buy-ok'));
     box.appendChild(row); ov.appendChild(box); this.root.appendChild(ov);
   }
 }
@@ -7049,6 +7085,111 @@ class World3D {
   }
 }
 module.exports = { World3D };
+
+};
+defs["rbx/geo.js"]=function(module,exports,require){'use strict';
+// Geolocation + locale for LocalizationService in the browser emulator.
+//  - GetCountryRegionForPlayerAsync: real IP-geolocation through key-less CORS services, tried in order
+//    (Cloudflare cdn-cgi/trace -> get.geojs.io -> api.country.is -> ipapi.co) within a ~2 s budget;
+//    if all fail the call errors like on Roblox (games wrap it in pcall and fall back to LocaleId).
+//  - Player.LocaleId / LocalizationService.RobloxLocaleId: from navigator.language.
+//  - URL overrides: ?country=RU (no network lookup), ?lang=en (LocaleId=en-us and no lookup unless ?country is given),
+//    ?geo=0 (no network lookup).
+// Pure module: fetch / navigator / location are injected, so it is unit-testable in node.
+
+const RU_COUNTRIES = ['RU', 'BY', 'KZ', 'KG', 'AM', 'AZ', 'MD', 'TJ', 'UZ', 'TM'];
+
+const SERVICES = [
+  { name: 'cloudflare', url: 'https://www.cloudflare.com/cdn-cgi/trace', parse: (t) => { const m = /^loc=([A-Za-z]{2})\s*$/m.exec(t); return m ? m[1] : null; } },
+  { name: 'geojs', url: 'https://get.geojs.io/v1/ip/country', parse: (t) => t.trim() },
+  { name: 'country.is', url: 'https://api.country.is/', parse: (t) => JSON.parse(t).country },
+  { name: 'ipapi.co', url: 'https://ipapi.co/country/', parse: (t) => t.trim() },
+];
+
+function validCountry(c) {
+  c = String(c == null ? '' : c).trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(c) && c !== 'XX' && c !== 'T1' ? c : null; // XX = unknown, T1 = Tor (Cloudflare)
+}
+
+// 'ru-RU' -> 'ru-ru', 'ru' -> 'ru-ru', 'en' -> 'en-us', 'pt_BR' -> 'pt-br'
+function normLocale(s) {
+  s = String(s || '').trim().replace(/_/g, '-').toLowerCase();
+  if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(s)) return 'en-us';
+  if (!s.includes('-')) return s === 'en' ? 'en-us' : s + '-' + s;
+  return s;
+}
+
+// Same policy as the game (Locale.detect): ru for the RU list, UA only with a Russian locale, else en.
+function langFor(country, localeId) {
+  const ru = /^ru/.test(String(localeId || '').toLowerCase());
+  if (!country) return ru ? 'ru' : 'en';
+  if (RU_COUNTRIES.includes(country)) return 'ru';
+  if (country === 'UA') return ru ? 'ru' : 'en';
+  return 'en';
+}
+
+function param(search, k) {
+  const m = new RegExp('[?&]' + k + '(=([^&]*))?').exec(search || '');
+  return m ? (m[2] === undefined ? '1' : decodeURIComponent(m[2])) : null;
+}
+
+function create(opts) {
+  opts = opts || {};
+  const search = opts.search || '';
+  const now = opts.now || (() => Date.now());
+  const g = {
+    status: 'pending', country: null, source: null, tried: [], listeners: [],
+    budgetMs: opts.budgetMs || 2000, perServiceMs: opts.perServiceMs || 1200, deadline: 0,
+    services: opts.services || SERVICES,
+  };
+  const forced = (param(search, 'lang') || '').toLowerCase();
+  g.forcedLang = /^[a-z]{2}$/.test(forced) ? forced : null;
+  g.localeId = g.forcedLang ? normLocale(g.forcedLang) : normLocale(opts.navigatorLanguage || 'en-US');
+  const pc = validCountry(param(search, 'country'));
+  const finish = (status, country, source) => {
+    if (g.status !== 'pending') return;
+    g.status = status; g.country = country; g.source = source;
+    for (const fn of g.listeners.splice(0)) { try { fn(g); } catch (e) { /* listener errors are not fatal */ } }
+  };
+  g.onDone = (fn) => { if (g.status !== 'pending') fn(g); else g.listeners.push(fn); };
+  g.lang = () => langFor(g.country, g.localeId);
+  g.start = () => {
+    if (g.started) return g.promise; g.started = true;
+    if (pc) { finish('ok', pc, 'param'); return (g.promise = Promise.resolve(g)); }
+    if (g.forcedLang || param(search, 'geo') === '0') { finish('skipped', null, g.forcedLang ? 'lang-param' : 'geo=0'); return (g.promise = Promise.resolve(g)); }
+    const fetchFn = opts.fetch;
+    if (typeof fetchFn !== 'function') { finish('fail', null, 'no-fetch'); return (g.promise = Promise.resolve(g)); }
+    g.deadline = now() + g.budgetMs;
+    g.promise = (async () => {
+      for (const s of g.services) {
+        const left = g.deadline - now();
+        if (left <= 50) break;
+        const ms = Math.min(g.perServiceMs, left);
+        const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        let timer = null;
+        const t0 = now();
+        try {
+          const res = await Promise.race([
+            fetchFn(s.url, { signal: ctl ? ctl.signal : undefined, cache: 'no-store', credentials: 'omit' }),
+            new Promise((_, rej) => { timer = setTimeout(() => { if (ctl) ctl.abort(); rej(new Error('timeout')); }, ms); }),
+          ]);
+          if (!res || !res.ok) throw new Error('HTTP ' + (res && res.status));
+          const c = validCountry(s.parse(await res.text()));
+          g.tried.push({ name: s.name, ok: !!c, ms: now() - t0, country: c });
+          if (c) { finish('ok', c, s.name); return g; }
+        } catch (e) {
+          g.tried.push({ name: s.name, ok: false, ms: now() - t0, error: String(e && e.message || e) });
+        } finally { if (timer) clearTimeout(timer); }
+      }
+      finish('fail', null, 'all-failed');
+      return g;
+    })();
+    return g.promise;
+  };
+  return g;
+}
+
+module.exports = { create, validCountry, normLocale, langFor, param, SERVICES, RU_COUNTRIES };
 
 };
 var entry=req("rbx/boot.js");})();

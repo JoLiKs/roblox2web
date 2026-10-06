@@ -47,7 +47,7 @@ const P = require('./project');
 const D = require('./datatypes');
 const I = require('./instance');
 const { CLASSES } = I;
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 
 const SVC_LIBS = new Set(['string', 'table', 'math', 'os', 'bit32', 'utf8', 'coroutine', 'debug', 'task']);
 let supportedCache = null;
@@ -4614,7 +4614,8 @@ ENV.start = function (opts) {
   // local player joins
   if (opts.player !== false) {
     const nm = opts.playerName || 'Player1';
-    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId });
+    if (opts.localeId) { const ls = ENV.getService('LocalizationService'); ls.props.RobloxLocaleId = opts.localeId; ls.props.SystemLocaleId = opts.localeId; }
+    ENV.addPlayer(nm, { isLocal: true, premium: !!opts.premium, userId: opts.userId, localeId: opts.localeId });
   }
   // ReplicatedFirst local scripts
   const rf = ENV.svcOrNull('ReplicatedFirst');
@@ -5173,7 +5174,18 @@ CLASSES.get('GuiService').props.set('SelectedObject', { def: undefined });
 CLASSES.get('GuiService').props.set('TouchControlsEnabled', { def: true });
 CLASSES.get('GuiService').props.set('AutoSelectGuiEnabled', { def: true });
 CLASSES.get('GuiService').props.set('GuiNavigationEnabled', { def: true });
-defMethods('LocalizationService', { GetCountryRegionForPlayerAsync() { return 'US'; }, });
+// Country: real IP-geolocation started by boot.js (ENV.geo, see geo.js); headless/no geo -> 'US'.
+defMethods('LocalizationService', {
+  GetCountryRegionForPlayerAsync: function* (self, player) {
+    const g = ENV.geo;
+    if (!g) return 'US';
+    const co = CO.current;
+    const wallLimit = Date.now() + (g.budgetMs || 2000) + 1500; // geo.js enforces its own budget; this is a safety net
+    while (g.status === 'pending' && co && Date.now() < wallLimit) { ENV.rt.sleep(co, 0.05, []); yield SCHED; }
+    if (g.country) return g.country;
+    throw rtError('LocalizationService:GetCountryRegionForPlayerAsync() failed: country is unavailable (' + (g.source || g.status) + ')');
+  },
+});
 CLASSES.get('LocalizationService').props.set('RobloxLocaleId', { def: 'en-us' });
 CLASSES.get('LocalizationService').props.set('SystemLocaleId', { def: 'en-us' });
 defMethods('ContentProvider', { PreloadAsync: function* () { return E; } });
@@ -5397,6 +5409,7 @@ ENV.addPlayer = function (name, opts) {
   pl.props.UserId = opts.userId || nextUserId++;
   pl.props.AccountAge = opts.accountAge === undefined ? 365 : opts.accountAge;
   pl.props.MembershipType = En('MembershipType', opts.premium ? 'Premium' : 'None');
+  if (opts.localeId) pl.props.LocaleId = String(opts.localeId);
   pl.shirt = SHIRTS[(pl.props.UserId) % SHIRTS.length];
   pl.isLocal = !!opts.isLocal;
   pl.setParent(playersSvc);
