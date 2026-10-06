@@ -256,7 +256,7 @@ class GuiRenderer {
     // border / stroke
     const shadows = [];
     const bs = p.BorderSizePixel || 0;
-    if (bs > 0 && (p.BackgroundTransparency || 0) < 1 || bs > 0 && !isText && i.className !== 'ImageLabel') shadows.push(`0 0 0 ${bs}px ${css(p.BorderColor3, 1)}`);
+    if (bs > 0 && (p.BackgroundTransparency || 0) < 1) shadows.push(`0 0 0 ${bs}px ${css(p.BorderColor3, 1 - (p.BackgroundTransparency || 0))}`); // как в Roblox: рамка прозрачна вместе с фоном
     if (stroke && !(isText && stroke.ApplyStrokeMode.name === 'Contextual')) { const th = stroke.Thickness; shadows.length = 0; shadows.push(`0 0 0 ${th}px ${css(stroke.Color, 1 - stroke.Transparency)}`); }
     set('boxShadow', shadows.join(','));
     if (p.Rotation) set('transform', `rotate(${p.Rotation}deg)${scale !== 1 ? ` scale(${scale})` : ''}`); else set('transform', scale !== 1 ? `scale(${scale})` : 'none');

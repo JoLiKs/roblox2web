@@ -124,6 +124,17 @@ ENV.buildRig = function (name, shirt, skin) {
   mkPart('Left Leg', v3(1, 2, 1), v3(-0.5, -2, 0), pants, m); mkPart('Right Leg', v3(1, 2, 1), v3(0.5, -2, 0), pants, m);
   const h = newInstance('Humanoid'); h.props.HipHeight = 0; h.props.RigType = En('HumanoidRigType', 'R6'); h.setParent(m);
   m.props.PrimaryPart = hrp;
+  // Standard R6 joints (same names / C0 / C1 as a real Roblox R6 character): scripts can animate limbs via Motor6D.C0 / Transform.
+  const torso = m.findChild('Torso');
+  const R = (a) => a; const cf = (x, y, z, r) => new CFrame(x, y, z, r);
+  const RS = [0, 0, 1, 0, 1, 0, -1, 0, 0], LS = [0, 0, -1, 0, 1, 0, 1, 0, 0], NK = [-1, 0, 0, 0, 0, 1, 0, 1, 0];
+  const motor = (name, parent, p0, p1, c0, c1) => { const j = newInstance('Motor6D'); j.props.Name = name; j.props.Part0 = p0; j.props.Part1 = p1; j.props.C0 = c0; j.props.C1 = c1; j.setParent(parent); return j; };
+  motor('RootJoint', hrp, hrp, torso, cf(0, 0, 0, NK), cf(0, 0, 0, NK));
+  motor('Right Shoulder', torso, torso, m.findChild('Right Arm'), cf(1, 0.5, 0, R(RS)), cf(-0.5, 0.5, 0, RS));
+  motor('Left Shoulder', torso, torso, m.findChild('Left Arm'), cf(-1, 0.5, 0, LS), cf(0.5, 0.5, 0, LS));
+  motor('Right Hip', torso, torso, m.findChild('Right Leg'), cf(1, -1, 0, RS), cf(0.5, 1, 0, RS));
+  motor('Left Hip', torso, torso, m.findChild('Left Leg'), cf(-1, -1, 0, LS), cf(-0.5, 1, 0, LS));
+  motor('Neck', torso, torso, m.findChild('Head'), cf(0, 1, 0, NK), cf(0, -0.5, 0, NK));
   return m;
 };
 ENV.character = {

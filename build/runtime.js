@@ -133,6 +133,7 @@ R2W.start = function (opts) {
     let dt = (now - last) / 1000; last = now; if (dt > 0.1) dt = 0.1;
     acc += dt;
     try {
+      if (ENV.paused) acc = 0; // R2W.ENV.paused = true — заморозить симуляцию (рендер продолжается; для скриншотов/отладки)
       if (acc > 0.0001) {
         const sub = acc > 1 / 25 ? 2 : 1; for (let i = 0; i < sub; i++) ENV.frame(acc / sub); acc = 0;
       }
@@ -3837,7 +3838,10 @@ ENV.boot = function (opts) {
     out: (s) => ENV.log('out', 'rt', s), warn: (s) => ENV.log('warn', 'rt', s), err: (s) => ENV.log('err', 'rt', s),
   });
   rt.rngState = opts.seed !== undefined ? opts.seed : (Date.now() & 0x7fffffff);
-  ENV.epoch0 = Date.now();
+  ENV.epoch0 = opts.epoch0 !== undefined ? opts.epoch0 : Date.now();
+  // единое виртуальное время: os.clock / os.time / tick идут вместе с кадрами (детерминированные тесты, simulate())
+  rt.clockFn = () => rt.now;
+  rt.unixTime = () => ENV.epoch0 + rt.now * 1000;
   rt.onThreadError = (msg, co) => {
     const who = co && co.ctx ? co.ctx.name : 'server';
     ENV.log('err', who, msg + (co && co.script ? '' : ''));
@@ -4156,7 +4160,7 @@ defClass('HttpService', 'Instance', { service: true, props: { HttpEnabled: false
   JSONEncode(self, v) { return jsonEncode(v); },
   JSONDecode(self, s) { if (typeof s !== 'string') throw rtError('JSONDecode: string expected'); return jsonDecode(s); },
   GenerateGUID(self, wrap) { const h = () => Math.floor(rt().rand() * 65536).toString(16).padStart(4, '0').toUpperCase(); const g = `${h()}${h()}-${h()}-${h()}-${h()}-${h()}${h()}${h()}`; return wrap === false ? g : '{' + g + '}'; },
-  UrlEncode(self, s) { return encodeURIComponent(s).replace(/%20/g, '+'); },
+  UrlEncode(self, s) { return encodeURIComponent(s); },
   GetAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   PostAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   RequestAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
@@ -4672,6 +4676,7 @@ defClass('StarterGear', 'Instance');
 defClass('ClickDetector', 'Instance', { props: { MaxActivationDistance: 32, CursorIcon: '' }, events: ['MouseClick', 'RightMouseClick', 'MouseHoverEnter', 'MouseHoverLeave'] });
 defClass('ProximityPrompt', 'Instance', { props: { ActionText: 'Interact', ObjectText: '', HoldDuration: 0, KeyboardKeyCode: En('KeyCode','E'), GamepadKeyCode: En('KeyCode','ButtonX'), MaxActivationDistance: 10, Enabled: true, RequiresLineOfSight: true, Exclusivity: En('ProximityPromptExclusivity','OnePerButton'), ClickablePrompt: true, UIOffset: new Vector2(0, 0), Style: En('ProximityPromptStyle','Default'), AutoLocalize: true, RootLocalizationTable: undefined },
   events: ['Triggered', 'TriggerEnded', 'PromptShown', 'PromptHidden', 'PromptButtonHoldBegan', 'PromptButtonHoldEnded'] });
+defMethods('ProximityPrompt', { InputHoldBegin(self) { if (!self.props.Enabled) return E; self.fireSignal('Triggered', ENV.localPlayer); return E; }, InputHoldEnd(self) { self.fireSignal('TriggerEnded', ENV.localPlayer); return E; } });
 defMethods('ParticleEmitter', { Emit(self, n) { if (ENV.fx) ENV.fx.emit(self, n === undefined ? 1 : n); return E; }, Clear() { return E; } });
 defMethods('Explosion', {});
 
@@ -4723,6 +4728,7 @@ methods: {
   Kick(self, msg) { ENV.kick(self, msg); return E; },
   GetMouse(self) { return ENV.input ? ENV.input.mouse(self) : undefined; },
   IsFriendsWith(self, id) { return false; },
+  IsFriendsWithAsync(self, id) { return false; },
   IsInGroup() { return false; }, GetRankInGroup() { return 0; }, GetRoleInGroup() { return 'Guest'; },
   GetJoinData() { return new LuaTable(); },
   DistanceFromCharacter(self, p) { const c = self.props.Character; const r = c && c.findChild('HumanoidRootPart'); if (!r) return 0; const q = r.props.CFrame; return Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z); },
@@ -4778,11 +4784,11 @@ defClass('CanvasGroup', 'Frame', { props: { GroupTransparency: 0, GroupColor3: c
 const textProps = {
   Text: '', TextColor3: c3(0.106, 0.106, 0.106), TextSize: 14, Font: En('Font', 'SourceSans'), FontFace: undefined, TextXAlignment: En('TextXAlignment', 'Center'), TextYAlignment: En('TextYAlignment', 'Center'),
   TextWrapped: false, TextScaled: false, TextTransparency: 0, TextStrokeColor3: c3(0, 0, 0), TextStrokeTransparency: 1, RichText: false, LineHeight: 1, TextTruncate: En('TextTruncate', 'None'), MaxVisibleGraphemes: -1, TextDirection: En('TextDirection', 'Auto'),
-  TextBounds: P(undefined, { get: (i) => ENV.measureText ? ENV.measureText(i) : new Vector2(0, 0), ro: true }),
+  TextBounds: P(undefined, { get: (i) => { const a = i.abs; const m = ENV.layout.measure(i, a ? a.w : 0); return new Vector2(Math.ceil(m.w), Math.ceil(m.h)); }, ro: true }),
   TextFits: P(undefined, { get: () => true, ro: true }), ContentText: P(undefined, { get: (i) => i.props.Text, ro: true }),
 };
 defClass('TextLabel', 'GuiObject', { props: Object.assign({}, textProps, { Text: 'Label' }) });
-defClass('GuiButton', 'GuiObject', { noCreate: true, props: { AutoButtonColor: true, Modal: false, Style: En('ButtonStyle', 'Custom'), Selected: false }, events: ['Activated', 'MouseButton1Click', 'MouseButton1Down', 'MouseButton1Up', 'MouseButton2Click', 'MouseButton2Down', 'MouseButton2Up'] });
+defClass('GuiButton', 'GuiObject', { noCreate: true, props: { Active: true, AutoButtonColor: true, Modal: false, Style: En('ButtonStyle', 'Custom'), Selected: false }, events: ['Activated', 'MouseButton1Click', 'MouseButton1Down', 'MouseButton1Up', 'MouseButton2Click', 'MouseButton2Down', 'MouseButton2Up'] });
 defClass('TextButton', 'GuiButton', { props: Object.assign({}, textProps, { Text: 'Button' }) });
 defClass('TextBox', 'GuiObject', { props: Object.assign({}, textProps, { Text: '', PlaceholderText: '', PlaceholderColor3: c3(0.7, 0.7, 0.7), ClearTextOnFocus: true, MultiLine: false, TextEditable: true, ShowNativeInput: true, CursorPosition: 1, SelectionStart: -1 }),
   events: ['FocusLost', 'Focused', 'ReturnPressed'],
@@ -4803,7 +4809,7 @@ defClass('UIComponent', 'UIBase', { noCreate: true });
 defClass('UILayout', 'UIComponent', { noCreate: true, props: { HorizontalAlignment: En('HorizontalAlignment', 'Left'), VerticalAlignment: En('VerticalAlignment', 'Top'), SortOrder: En('SortOrder', 'LayoutOrder'), FillDirection: En('FillDirection', 'Vertical'), AbsoluteContentSize: P(undefined, { get: (i) => new Vector2(i.contentW || 0, i.contentH || 0), ro: true }) } });
 defClass('UIListLayout', 'UILayout', { props: { Padding: new UDim(0, 0), Wraps: false, ItemLineAlignment: En('ItemLineAlignment', 'Automatic') } });
 defClass('UIGridStyleLayout', 'UILayout', { noCreate: true });
-defClass('UIGridLayout', 'UIGridStyleLayout', { props: { CellPadding: u2(0, 5, 0, 5), CellSize: u2(0, 100, 0, 100), FillDirectionMaxCells: 0, StartCorner: En('StartCorner', 'TopLeft'), AbsoluteCellCount: P(undefined, { get: (i) => new Vector2(i.cellsX || 0, i.cellsY || 0), ro: true }), AbsoluteCellSize: P(undefined, { get: (i) => new Vector2(i.cellW || 0, i.cellH || 0), ro: true }) } });
+defClass('UIGridLayout', 'UIGridStyleLayout', { props: { FillDirection: En('FillDirection', 'Horizontal'), CellPadding: u2(0, 5, 0, 5), CellSize: u2(0, 100, 0, 100), FillDirectionMaxCells: 0, StartCorner: En('StartCorner', 'TopLeft'), AbsoluteCellCount: P(undefined, { get: (i) => new Vector2(i.cellsX || 0, i.cellsY || 0), ro: true }), AbsoluteCellSize: P(undefined, { get: (i) => new Vector2(i.cellW || 0, i.cellH || 0), ro: true }) } });
 defClass('UIPadding', 'UIComponent', { props: { PaddingTop: new UDim(0, 0), PaddingBottom: new UDim(0, 0), PaddingLeft: new UDim(0, 0), PaddingRight: new UDim(0, 0) } });
 defClass('UICorner', 'UIComponent', { props: { CornerRadius: new UDim(0, 8) } });
 defClass('UIStroke', 'UIComponent', { props: { Color: c3(0, 0, 0), Thickness: 1, Transparency: 0, Enabled: true, ApplyStrokeMode: En('ApplyStrokeMode', 'Contextual'), LineJoinMode: En('LineJoinMode', 'Round') } });
@@ -5069,6 +5075,17 @@ ENV.buildRig = function (name, shirt, skin) {
   mkPart('Left Leg', v3(1, 2, 1), v3(-0.5, -2, 0), pants, m); mkPart('Right Leg', v3(1, 2, 1), v3(0.5, -2, 0), pants, m);
   const h = newInstance('Humanoid'); h.props.HipHeight = 0; h.props.RigType = En('HumanoidRigType', 'R6'); h.setParent(m);
   m.props.PrimaryPart = hrp;
+  // Standard R6 joints (same names / C0 / C1 as a real Roblox R6 character): scripts can animate limbs via Motor6D.C0 / Transform.
+  const torso = m.findChild('Torso');
+  const R = (a) => a; const cf = (x, y, z, r) => new CFrame(x, y, z, r);
+  const RS = [0, 0, 1, 0, 1, 0, -1, 0, 0], LS = [0, 0, -1, 0, 1, 0, 1, 0, 0], NK = [-1, 0, 0, 0, 0, 1, 0, 1, 0];
+  const motor = (name, parent, p0, p1, c0, c1) => { const j = newInstance('Motor6D'); j.props.Name = name; j.props.Part0 = p0; j.props.Part1 = p1; j.props.C0 = c0; j.props.C1 = c1; j.setParent(parent); return j; };
+  motor('RootJoint', hrp, hrp, torso, cf(0, 0, 0, NK), cf(0, 0, 0, NK));
+  motor('Right Shoulder', torso, torso, m.findChild('Right Arm'), cf(1, 0.5, 0, R(RS)), cf(-0.5, 0.5, 0, RS));
+  motor('Left Shoulder', torso, torso, m.findChild('Left Arm'), cf(-1, 0.5, 0, LS), cf(0.5, 0.5, 0, LS));
+  motor('Right Hip', torso, torso, m.findChild('Right Leg'), cf(1, -1, 0, RS), cf(0.5, 1, 0, RS));
+  motor('Left Hip', torso, torso, m.findChild('Left Leg'), cf(-1, -1, 0, LS), cf(-0.5, 1, 0, LS));
+  motor('Neck', torso, torso, m.findChild('Head'), cf(0, 1, 0, NK), cf(0, -0.5, 0, NK));
   return m;
 };
 ENV.character = {
@@ -5185,7 +5202,7 @@ function removePart(p) {
 }
 const inWorkspace = (i) => { for (let p = i; p; p = p.parent) if (p === ENV.workspace) return true; return false; };
 ENV.listeners.attach.push((i) => {
-  if (i.isA('BasePart') && inWorkspace(i)) addPart(i);
+  if (i.isA('BasePart') && i.className !== 'Terrain' && inWorkspace(i)) addPart(i);
   else if (i.className === 'Humanoid') registerHumanoid(i);
   else if (i.className === 'WeldConstraint' || i.className === 'Weld') world.asmDirty = true;
 });
@@ -5439,10 +5456,25 @@ function setupCtl(h) {
   const ctl = { m, hrp, r6, feet, top: r6 ? 2 : hrp.props.Size.y / 2 + 1.5, pos: [cf.x, cf.y, cf.z], yaw: Math.atan2(-cf.r[2], cf.r[8]) || 0, vy: 0, vx: 0, vz: 0, grounded: false, lastCF: cf, floor: null, floorCF: null, t: 0, phase: 0, swing: 0, dead: false, deathT: 0, moveT: 0, jumpReq: false, rec: world.parts.get(hrp), parts: null, restPose: false, airT: 0 };
   if (cf.r) { const fy = D.eulerYXZ(cf.r); ctl.yaw = fy[1]; }
   ctl.parts = {}; for (const n of ['Torso', 'Head', 'Left Arm', 'Right Arm', 'Left Leg', 'Right Leg']) { const p = m.findChild(n); if (p) ctl.parts[n] = p; }
+  ctl.motors = findMotors(m, ctl);
   ctl.rel = new Map();
   const inv = D.cfInverse(cf);
   for (const p of m.descendants()) if (p.isA('BasePart')) { p.charPart = true; const r = world.parts.get(p); if (r) r.inCtl = true; if (!r6 && p !== hrp) ctl.rel.set(p, D.cfMul(inv, p.props.CFrame)); }
   h.ctl = ctl; return ctl;
+}
+// R6 Motor6D joints (if present): limb = Part0 * C0 * anim * Transform * C1^-1 — scripts can tween C0 / set Transform.
+function findMotors(m, ctl) {
+  const out = {}; let n = 0;
+  for (const d of m.descendants()) if (d.className === 'Motor6D' && d.props.Part1) { out[d.props.Name] = d; n++; }
+  if (!out.RootJoint || !out['Right Shoulder']) return null;
+  return n ? out : null;
+}
+function rotZ(a) { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; }
+function motorCF(j, base, ang) {
+  const p = j.props; let t = p.C0;
+  if (ang) t = D.cfMul(t, new CFrame(0, 0, 0, rotZ(ang)));
+  if (p.Transform) t = D.cfMul(t, p.Transform);
+  return D.cfMul(D.cfMul(base, t), D.cfInverse(p.C1));
 }
 function ctlBox(ctl) {
   const c = ctl; const cy = c.pos[1] - c.feet + (c.feet + c.top) / 2, hy = (c.feet + c.top) / 2;
@@ -5468,6 +5500,18 @@ function poseRig(ctl, swing, air, fall) {
   setPart(ctl.hrp, root);
   if (!ctl.r6) { for (const [p, rel] of ctl.rel) if (!p.destroyed) setPart(p, D.cfMul(root, rel)); return; }
   const P = ctl.parts;
+  if (!ctl.motors && ((ctl.motorScan = (ctl.motorScan || 0) + 1) % 30 === 1)) ctl.motors = findMotors(ctl.m, ctl);
+  const M = ctl.motors;
+  if (M && !M.RootJoint.destroyed) {
+    const a = swing * 0.9;
+    const torsoCF = motorCF(M.RootJoint, root, 0);
+    if (P.Torso) setPart(P.Torso, torsoCF);
+    const joint = (name, ang) => { const j = M[name]; if (j && !j.destroyed && j.props.Part1 && !j.props.Part1.destroyed) setPart(j.props.Part1, motorCF(j, torsoCF, ang)); };
+    joint('Neck', 0);
+    joint('Right Shoulder', air ? 2.8 : -a); joint('Left Shoulder', air ? -2.8 : -a);
+    joint('Right Hip', air ? -0.35 : a); joint('Left Hip', air ? -0.35 : a);
+    return;
+  }
   const put = (name, cf) => { if (P[name]) setPart(P[name], D.cfMul(root, cf)); };
   put('Torso', new CFrame(0, 0, 0)); put('Head', new CFrame(0, 1.5, 0));
   const a = swing * 0.9;
@@ -6001,6 +6045,7 @@ function measure(inst, maxW) {
   if (p.TextWrapped && maxW > 0 && w > maxW) { const n = Math.ceil(w / maxW); h = n * size * 1.15 * lines.length; w = maxW; }
   return { w, h };
 }
+layout.measure = measure;
 const udim = (u, base) => u.s * base + u.o;
 function childList(parent) { return parent.children.filter((c) => c.isA('GuiObject')); }
 function findChildOfClass(parent, cls) { for (const c of parent.children) if (c.isA(cls)) return c; return null; }
@@ -6328,8 +6373,8 @@ class GuiRenderer {
     this.root = opts.root; this.doc = this.root.ownerDocument;
     this.recs = new Map(); this.roots = new Map(); this.focused = null; this.renderDirty = new Set(); this.pending = new Set();
     this.layer = this.doc.createElement('div'); this.layer.className = 'r2w-guilayer'; this.root.appendChild(this.layer);
-    this.layer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;';
-    this.bbLayer = this.doc.createElement('div'); this.bbLayer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;'; this.root.insertBefore(this.bbLayer, this.layer);
+    this.layer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;z-index:2;';
+    this.bbLayer = this.doc.createElement('div'); this.bbLayer.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden;pointer-events:none;z-index:1;'; this.root.insertBefore(this.bbLayer, this.layer);
     this.size();
     ENV.gui = this;
     ENV.textSizeFn = measureText;
@@ -6393,7 +6438,7 @@ class GuiRenderer {
         if (Math.abs(cp.x - el.scrollLeft) > 0.5 || Math.abs(cp.y - el.scrollTop) > 0.5) { i.props.CanvasPosition = new Vector2(el.scrollLeft, el.scrollTop); i.changed('CanvasPosition'); this.shiftAbs(i, rec); }
       });
     }
-    if (i.isA('TextLabel') || i.isA('TextButton')) { const t = doc.createElement('div'); t.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;overflow:hidden;pointer-events:none;'; const s = doc.createElement('span'); s.style.cssText = 'display:block;width:100%;'; t.appendChild(s); el.appendChild(t); rec.text = t; rec.span = s; rec.textHost = t; }
+    if (i.isA('TextLabel') || i.isA('TextButton') || i.isA('TextBox')) { const t = doc.createElement('div'); t.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;display:flex;overflow:hidden;pointer-events:none;'; const s = doc.createElement('span'); s.style.cssText = 'display:block;width:100%;'; t.appendChild(s); el.appendChild(t); rec.text = t; rec.span = s; rec.textHost = t; }
     if (i.isA('TextBox')) { rec.input = null; }
     if (i.isA('ImageLabel') || i.isA('ImageButton')) { const im = doc.createElement('img'); im.draggable = false; im.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;'; el.appendChild(im); rec.img = im; im.style.display = 'none'; }
     if (i.isA('GuiButton')) { el.style.cursor = 'pointer'; }
@@ -6511,7 +6556,7 @@ class GuiRenderer {
     // border / stroke
     const shadows = [];
     const bs = p.BorderSizePixel || 0;
-    if (bs > 0 && (p.BackgroundTransparency || 0) < 1 || bs > 0 && !isText && i.className !== 'ImageLabel') shadows.push(`0 0 0 ${bs}px ${css(p.BorderColor3, 1)}`);
+    if (bs > 0 && (p.BackgroundTransparency || 0) < 1) shadows.push(`0 0 0 ${bs}px ${css(p.BorderColor3, 1 - (p.BackgroundTransparency || 0))}`); // как в Roblox: рамка прозрачна вместе с фоном
     if (stroke && !(isText && stroke.ApplyStrokeMode.name === 'Contextual')) { const th = stroke.Thickness; shadows.length = 0; shadows.push(`0 0 0 ${th}px ${css(stroke.Color, 1 - stroke.Transparency)}`); }
     set('boxShadow', shadows.join(','));
     if (p.Rotation) set('transform', `rotate(${p.Rotation}deg)${scale !== 1 ? ` scale(${scale})` : ''}`); else set('transform', scale !== 1 ? `scale(${scale})` : 'none');
@@ -6522,7 +6567,12 @@ class GuiRenderer {
     if (i.isA('ImageLabel') || i.isA('ImageButton')) this.styleImage(i, rec);
     if (i.className === 'ViewportFrame' || i.className === 'VideoFrame') { if (!this.warnedImages.has(i.className)) { this.warnedImages.add(i.className); noteUnsupported(i.className + ' (placeholder only)'); ENV.log('warn', 'r2w', '[unsupported] ' + i.className + ' is rendered as a placeholder'); } }
     if (i.className === 'CanvasGroup') set('opacity', String(1 - (p.GroupTransparency || 0)));
-    el.dataset.active = (p.Active || i.isA('GuiButton')) ? '1' : '';
+    const act = !!(p.Active || i.isA('GuiButton') || i.isA('TextBox') || i.className === 'ScrollingFrame');
+    const root = layout.rootOf(i); const inBB = root && root.className === 'BillboardGui';
+    const solid = (p.BackgroundTransparency || 0) < 1 || (isText && p.Text) || (i.isA('ImageLabel') && p.Image) || ['InputBegan', 'MouseEnter', 'InputEnded', 'InputChanged'].some((n) => i.hasSignal(n));
+    const pe = act || (!inBB && solid) ? 'auto' : 'none';
+    set('pointerEvents', pe);
+    el.dataset.active = (pe === 'auto' && !inBB) || act ? '1' : '';
   }
   styleScroll(i, rec) {
     const p = i.props, el = rec.el, st = el.style;
@@ -6677,7 +6727,7 @@ class World3D {
     this.geoms.box = new THREE.BoxGeometry(1, 1, 1); this.geoms.sphere = new THREE.SphereGeometry(0.5, 20, 14);
     const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 24); cyl.rotateZ(Math.PI / 2); this.geoms.cyl = cyl; this.geoms.wedge = mkWedge(THREE);
     this.cam = ENV.cam = { yaw: 0.0, pitch: 0.38, dist: 14, focus: new THREE.Vector3(0, 5, 0), minDist: 0.5, maxDist: 128, shake: 0 };
-    this.labels = new Map(); this.labelLayer = document.createElement('div'); this.labelLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;'; this.container.appendChild(this.labelLayer);
+    this.labels = new Map(); this.labelLayer = document.createElement('div'); this.labelLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:0;'; this.container.appendChild(this.labelLayer);
     this.lights = new Map(); this.warned = new Set();
     this.faceTex = null;
     ENV.project = (p) => this.project(p);
@@ -6693,7 +6743,7 @@ class World3D {
   }
   inWs(i) { for (let p = i; p; p = p.parent) if (p === ENV.workspace) return true; return false; }
   onAttach(i) {
-    if (i.isA('BasePart') && this.inWs(i)) { this.dirty.add(i); }
+    if (i.isA('BasePart') && i.className !== 'Terrain' && this.inWs(i)) { this.dirty.add(i); }
     else if (i.isA('Light') && this.inWs(i)) this.lights.set(i, null);
     else if (i.className === 'ParticleEmitter' || i.className === 'Beam' || i.className === 'Trail' || i.className === 'Decal' || i.className === 'Texture' || i.className === 'SpecialMesh' || i.className === 'Highlight' || i.className === 'Sky') {
       const key = i.className; if (!this.warned.has(key)) { this.warned.add(key); I.noteUnsupported(key + ' (not rendered)'); ENV.log('warn', 'r2w', `[unsupported] ${key} is accepted but not rendered by the 3D emulator`); }

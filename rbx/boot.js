@@ -130,6 +130,7 @@ R2W.start = function (opts) {
     let dt = (now - last) / 1000; last = now; if (dt > 0.1) dt = 0.1;
     acc += dt;
     try {
+      if (ENV.paused) acc = 0; // R2W.ENV.paused = true — заморозить симуляцию (рендер продолжается; для скриншотов/отладки)
       if (acc > 0.0001) {
         const sub = acc > 1 / 25 ? 2 : 1; for (let i = 0; i < sub; i++) ENV.frame(acc / sub); acc = 0;
       }

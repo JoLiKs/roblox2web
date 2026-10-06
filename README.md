@@ -44,7 +44,7 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
 
 ```bash
 cd tests/conformance && node harness.js     # 528 кейсов, 9 файлов — результаты сверяются с эталонным интерпретатором luau
-node tests/emulator/run.js                  # 123 проверки эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, …)
+node tests/emulator/run.js                  # 129 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, …)
 python3 tests/browser/test_sites.py         # Chromium: 3 синтетических проекта (obby, tycoon, GUI-приложение)
 python3 tests/browser/test_online.py        # Chromium: онлайн-конвертор
 ```

@@ -1,6 +1,44 @@
 /* roblox2web 2.0 converter — bundled from lua2js/ and rbx/ (MIT) */
 (function(){var defs={},cache={};function req(id){if(cache[id])return cache[id].exports;var m=cache[id]={exports:{}};defs[id](m,m.exports,function(p){return req(res(id,p));});return m.exports;}
 function res(from,p){var parts=from.split('/');parts.pop();p.split('/').forEach(function(s){if(s==='.'||s==='')return;if(s==='..')parts.pop();else parts.push(s);});var r=parts.join('/');if(!/\.js$/.test(r))r+='.js';return r;}
+defs["rbx/site.js"]=function(module,exports,require){'use strict';
+// Builds the static site file map {path: string|Uint8Array}. Works in node and in the browser.
+const { convertProject, bundleJs, reportText, VERSION } = require('./convert');
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function indexHtml(title, opts) {
+  return `<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>${esc(title)}</title>
+<meta name="generator" content="roblox2web ${VERSION}">
+<link rel="icon" href="data:,">
+<style>html,body{margin:0;height:100%;background:#111;overflow:hidden}button{font-family:inherit}</style>
+</head><body>
+<div id="r2w-root"></div>
+<noscript>Нужен JavaScript и WebGL.</noscript>
+<script src="vendor/three.min.js"></script>
+<script src="runtime.js"></script>
+<script src="game.bundle.js"></script>
+</body></html>
+`;
+}
+function buildSite(prj, assets, opts) {
+  opts = opts || {};
+  const result = convertProject(prj);
+  const meta = { generator: 'roblox2web ' + VERSION, built: opts.built || undefined };
+  const files = {};
+  files['index.html'] = indexHtml(prj.name);
+  files['game.bundle.js'] = bundleJs(result, prj, meta);
+  files['CONVERSION_REPORT.txt'] = reportText(result.report) + '\n';
+  files['conversion_report.json'] = JSON.stringify(result.report, null, 2) + '\n';
+  files['.nojekyll'] = '';
+  files['README.txt'] = `Веб-версия «${prj.name}», собранная roblox2web ${VERSION}.\n\nLuau-скрипты игры транспилированы в JavaScript (game.bundle.js) и выполняются в браузерном эмуляторе Roblox (runtime.js, three.js в vendor/).\nЗапуск: любой статический сервер, например  python3 -m http.server  и открыть http://localhost:8000/ (файл по file:// тоже обычно работает).\nПодробности и список неподдержанных API: CONVERSION_REPORT.txt.\n`;
+  for (const k of Object.keys(assets || {})) files[k] = assets[k];
+  return { files, result };
+}
+module.exports = { buildSite, indexHtml };
+
+};
 defs["rbx/convert.js"]=function(module,exports,require){'use strict';
 // Project -> bundle: transpile all Luau scripts to JS, analyse API usage, emit bundle text.
 const { compile } = require('../lua2js/codegen');
@@ -1253,7 +1291,31 @@ function loadProject(files) {
       buildLoose(prj, files);
     }
   }
+  applyPatches(prj);
   return prj;
+}
+// roblox2web.config.json -> "patches": [{ "script": "Shared.Config", "find": "text", "replace": "text" } | { "script": "...", "regex": "...", "flags": "g", "replace": "$1..." }]
+// Нужны, чтобы подставить в веб-демо свои значения (например демо-ID геймпассов) без правки исходников игры.
+function applyPatches(prj) {
+  const list = prj.config && Array.isArray(prj.config.patches) ? prj.config.patches : [];
+  if (!list.length) return;
+  const scripts = prj.scripts();
+  list.forEach((p, i) => {
+    const label = `patches[${i}]`;
+    if (!p || typeof p.script !== 'string' || typeof p.replace !== 'string' || (typeof p.find !== 'string' && typeof p.regex !== 'string')) { prj.warnings.push(`${label}: нужны поля script, replace и find|regex — пропущено.`); return; }
+    const targets = scripts.filter((s) => s.path === p.script || s.path.endsWith('.' + p.script));
+    if (!targets.length) { prj.warnings.push(`${label}: скрипт "${p.script}" не найден.`); return; }
+    let changed = 0;
+    for (const t of targets) {
+      let out;
+      if (typeof p.regex === 'string') {
+        let re; try { re = new RegExp(p.regex, p.flags || 'g'); } catch (e) { prj.warnings.push(`${label}: неверное регулярное выражение (${e.message}).`); return; }
+        out = t.node.source.replace(re, p.replace);
+      } else out = t.node.source.split(p.find).join(p.replace);
+      if (out !== t.node.source) { t.node.source = out; changed++; }
+    }
+    if (!changed) prj.warnings.push(`${label}: в "${p.script}" ничего не нашлось для замены.`);
+  });
 }
 function buildRojo(prj, files, base, tree) {
   const keys = Object.keys(files);
@@ -4087,6 +4149,7 @@ defClass('StarterGear', 'Instance');
 defClass('ClickDetector', 'Instance', { props: { MaxActivationDistance: 32, CursorIcon: '' }, events: ['MouseClick', 'RightMouseClick', 'MouseHoverEnter', 'MouseHoverLeave'] });
 defClass('ProximityPrompt', 'Instance', { props: { ActionText: 'Interact', ObjectText: '', HoldDuration: 0, KeyboardKeyCode: En('KeyCode','E'), GamepadKeyCode: En('KeyCode','ButtonX'), MaxActivationDistance: 10, Enabled: true, RequiresLineOfSight: true, Exclusivity: En('ProximityPromptExclusivity','OnePerButton'), ClickablePrompt: true, UIOffset: new Vector2(0, 0), Style: En('ProximityPromptStyle','Default'), AutoLocalize: true, RootLocalizationTable: undefined },
   events: ['Triggered', 'TriggerEnded', 'PromptShown', 'PromptHidden', 'PromptButtonHoldBegan', 'PromptButtonHoldEnded'] });
+defMethods('ProximityPrompt', { InputHoldBegin(self) { if (!self.props.Enabled) return E; self.fireSignal('Triggered', ENV.localPlayer); return E; }, InputHoldEnd(self) { self.fireSignal('TriggerEnded', ENV.localPlayer); return E; } });
 defMethods('ParticleEmitter', { Emit(self, n) { if (ENV.fx) ENV.fx.emit(self, n === undefined ? 1 : n); return E; }, Clear() { return E; } });
 defMethods('Explosion', {});
 
@@ -4138,6 +4201,7 @@ methods: {
   Kick(self, msg) { ENV.kick(self, msg); return E; },
   GetMouse(self) { return ENV.input ? ENV.input.mouse(self) : undefined; },
   IsFriendsWith(self, id) { return false; },
+  IsFriendsWithAsync(self, id) { return false; },
   IsInGroup() { return false; }, GetRankInGroup() { return 0; }, GetRoleInGroup() { return 'Guest'; },
   GetJoinData() { return new LuaTable(); },
   DistanceFromCharacter(self, p) { const c = self.props.Character; const r = c && c.findChild('HumanoidRootPart'); if (!r) return 0; const q = r.props.CFrame; return Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z); },
@@ -4193,11 +4257,11 @@ defClass('CanvasGroup', 'Frame', { props: { GroupTransparency: 0, GroupColor3: c
 const textProps = {
   Text: '', TextColor3: c3(0.106, 0.106, 0.106), TextSize: 14, Font: En('Font', 'SourceSans'), FontFace: undefined, TextXAlignment: En('TextXAlignment', 'Center'), TextYAlignment: En('TextYAlignment', 'Center'),
   TextWrapped: false, TextScaled: false, TextTransparency: 0, TextStrokeColor3: c3(0, 0, 0), TextStrokeTransparency: 1, RichText: false, LineHeight: 1, TextTruncate: En('TextTruncate', 'None'), MaxVisibleGraphemes: -1, TextDirection: En('TextDirection', 'Auto'),
-  TextBounds: P(undefined, { get: (i) => ENV.measureText ? ENV.measureText(i) : new Vector2(0, 0), ro: true }),
+  TextBounds: P(undefined, { get: (i) => { const a = i.abs; const m = ENV.layout.measure(i, a ? a.w : 0); return new Vector2(Math.ceil(m.w), Math.ceil(m.h)); }, ro: true }),
   TextFits: P(undefined, { get: () => true, ro: true }), ContentText: P(undefined, { get: (i) => i.props.Text, ro: true }),
 };
 defClass('TextLabel', 'GuiObject', { props: Object.assign({}, textProps, { Text: 'Label' }) });
-defClass('GuiButton', 'GuiObject', { noCreate: true, props: { AutoButtonColor: true, Modal: false, Style: En('ButtonStyle', 'Custom'), Selected: false }, events: ['Activated', 'MouseButton1Click', 'MouseButton1Down', 'MouseButton1Up', 'MouseButton2Click', 'MouseButton2Down', 'MouseButton2Up'] });
+defClass('GuiButton', 'GuiObject', { noCreate: true, props: { Active: true, AutoButtonColor: true, Modal: false, Style: En('ButtonStyle', 'Custom'), Selected: false }, events: ['Activated', 'MouseButton1Click', 'MouseButton1Down', 'MouseButton1Up', 'MouseButton2Click', 'MouseButton2Down', 'MouseButton2Up'] });
 defClass('TextButton', 'GuiButton', { props: Object.assign({}, textProps, { Text: 'Button' }) });
 defClass('TextBox', 'GuiObject', { props: Object.assign({}, textProps, { Text: '', PlaceholderText: '', PlaceholderColor3: c3(0.7, 0.7, 0.7), ClearTextOnFocus: true, MultiLine: false, TextEditable: true, ShowNativeInput: true, CursorPosition: 1, SelectionStart: -1 }),
   events: ['FocusLost', 'Focused', 'ReturnPressed'],
@@ -4218,7 +4282,7 @@ defClass('UIComponent', 'UIBase', { noCreate: true });
 defClass('UILayout', 'UIComponent', { noCreate: true, props: { HorizontalAlignment: En('HorizontalAlignment', 'Left'), VerticalAlignment: En('VerticalAlignment', 'Top'), SortOrder: En('SortOrder', 'LayoutOrder'), FillDirection: En('FillDirection', 'Vertical'), AbsoluteContentSize: P(undefined, { get: (i) => new Vector2(i.contentW || 0, i.contentH || 0), ro: true }) } });
 defClass('UIListLayout', 'UILayout', { props: { Padding: new UDim(0, 0), Wraps: false, ItemLineAlignment: En('ItemLineAlignment', 'Automatic') } });
 defClass('UIGridStyleLayout', 'UILayout', { noCreate: true });
-defClass('UIGridLayout', 'UIGridStyleLayout', { props: { CellPadding: u2(0, 5, 0, 5), CellSize: u2(0, 100, 0, 100), FillDirectionMaxCells: 0, StartCorner: En('StartCorner', 'TopLeft'), AbsoluteCellCount: P(undefined, { get: (i) => new Vector2(i.cellsX || 0, i.cellsY || 0), ro: true }), AbsoluteCellSize: P(undefined, { get: (i) => new Vector2(i.cellW || 0, i.cellH || 0), ro: true }) } });
+defClass('UIGridLayout', 'UIGridStyleLayout', { props: { FillDirection: En('FillDirection', 'Horizontal'), CellPadding: u2(0, 5, 0, 5), CellSize: u2(0, 100, 0, 100), FillDirectionMaxCells: 0, StartCorner: En('StartCorner', 'TopLeft'), AbsoluteCellCount: P(undefined, { get: (i) => new Vector2(i.cellsX || 0, i.cellsY || 0), ro: true }), AbsoluteCellSize: P(undefined, { get: (i) => new Vector2(i.cellW || 0, i.cellH || 0), ro: true }) } });
 defClass('UIPadding', 'UIComponent', { props: { PaddingTop: new UDim(0, 0), PaddingBottom: new UDim(0, 0), PaddingLeft: new UDim(0, 0), PaddingRight: new UDim(0, 0) } });
 defClass('UICorner', 'UIComponent', { props: { CornerRadius: new UDim(0, 8) } });
 defClass('UIStroke', 'UIComponent', { props: { Color: c3(0, 0, 0), Thickness: 1, Transparency: 0, Enabled: true, ApplyStrokeMode: En('ApplyStrokeMode', 'Contextual'), LineJoinMode: En('LineJoinMode', 'Round') } });
@@ -4511,7 +4575,10 @@ ENV.boot = function (opts) {
     out: (s) => ENV.log('out', 'rt', s), warn: (s) => ENV.log('warn', 'rt', s), err: (s) => ENV.log('err', 'rt', s),
   });
   rt.rngState = opts.seed !== undefined ? opts.seed : (Date.now() & 0x7fffffff);
-  ENV.epoch0 = Date.now();
+  ENV.epoch0 = opts.epoch0 !== undefined ? opts.epoch0 : Date.now();
+  // единое виртуальное время: os.clock / os.time / tick идут вместе с кадрами (детерминированные тесты, simulate())
+  rt.clockFn = () => rt.now;
+  rt.unixTime = () => ENV.epoch0 + rt.now * 1000;
   rt.onThreadError = (msg, co) => {
     const who = co && co.ctx ? co.ctx.name : 'server';
     ENV.log('err', who, msg + (co && co.script ? '' : ''));
@@ -4830,7 +4897,7 @@ defClass('HttpService', 'Instance', { service: true, props: { HttpEnabled: false
   JSONEncode(self, v) { return jsonEncode(v); },
   JSONDecode(self, s) { if (typeof s !== 'string') throw rtError('JSONDecode: string expected'); return jsonDecode(s); },
   GenerateGUID(self, wrap) { const h = () => Math.floor(rt().rand() * 65536).toString(16).padStart(4, '0').toUpperCase(); const g = `${h()}${h()}-${h()}-${h()}-${h()}-${h()}${h()}${h()}`; return wrap === false ? g : '{' + g + '}'; },
-  UrlEncode(self, s) { return encodeURIComponent(s).replace(/%20/g, '+'); },
+  UrlEncode(self, s) { return encodeURIComponent(s); },
   GetAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   PostAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
   RequestAsync() { throw rtError('Http requests are not enabled. Enable via Game Settings (browser demo has no network access)'); },
@@ -5400,6 +5467,17 @@ ENV.buildRig = function (name, shirt, skin) {
   mkPart('Left Leg', v3(1, 2, 1), v3(-0.5, -2, 0), pants, m); mkPart('Right Leg', v3(1, 2, 1), v3(0.5, -2, 0), pants, m);
   const h = newInstance('Humanoid'); h.props.HipHeight = 0; h.props.RigType = En('HumanoidRigType', 'R6'); h.setParent(m);
   m.props.PrimaryPart = hrp;
+  // Standard R6 joints (same names / C0 / C1 as a real Roblox R6 character): scripts can animate limbs via Motor6D.C0 / Transform.
+  const torso = m.findChild('Torso');
+  const R = (a) => a; const cf = (x, y, z, r) => new CFrame(x, y, z, r);
+  const RS = [0, 0, 1, 0, 1, 0, -1, 0, 0], LS = [0, 0, -1, 0, 1, 0, 1, 0, 0], NK = [-1, 0, 0, 0, 0, 1, 0, 1, 0];
+  const motor = (name, parent, p0, p1, c0, c1) => { const j = newInstance('Motor6D'); j.props.Name = name; j.props.Part0 = p0; j.props.Part1 = p1; j.props.C0 = c0; j.props.C1 = c1; j.setParent(parent); return j; };
+  motor('RootJoint', hrp, hrp, torso, cf(0, 0, 0, NK), cf(0, 0, 0, NK));
+  motor('Right Shoulder', torso, torso, m.findChild('Right Arm'), cf(1, 0.5, 0, R(RS)), cf(-0.5, 0.5, 0, RS));
+  motor('Left Shoulder', torso, torso, m.findChild('Left Arm'), cf(-1, 0.5, 0, LS), cf(0.5, 0.5, 0, LS));
+  motor('Right Hip', torso, torso, m.findChild('Right Leg'), cf(1, -1, 0, RS), cf(0.5, 1, 0, RS));
+  motor('Left Hip', torso, torso, m.findChild('Left Leg'), cf(-1, -1, 0, LS), cf(-0.5, 1, 0, LS));
+  motor('Neck', torso, torso, m.findChild('Head'), cf(0, 1, 0, NK), cf(0, -0.5, 0, NK));
   return m;
 };
 ENV.character = {
@@ -5516,7 +5594,7 @@ function removePart(p) {
 }
 const inWorkspace = (i) => { for (let p = i; p; p = p.parent) if (p === ENV.workspace) return true; return false; };
 ENV.listeners.attach.push((i) => {
-  if (i.isA('BasePart') && inWorkspace(i)) addPart(i);
+  if (i.isA('BasePart') && i.className !== 'Terrain' && inWorkspace(i)) addPart(i);
   else if (i.className === 'Humanoid') registerHumanoid(i);
   else if (i.className === 'WeldConstraint' || i.className === 'Weld') world.asmDirty = true;
 });
@@ -5770,10 +5848,25 @@ function setupCtl(h) {
   const ctl = { m, hrp, r6, feet, top: r6 ? 2 : hrp.props.Size.y / 2 + 1.5, pos: [cf.x, cf.y, cf.z], yaw: Math.atan2(-cf.r[2], cf.r[8]) || 0, vy: 0, vx: 0, vz: 0, grounded: false, lastCF: cf, floor: null, floorCF: null, t: 0, phase: 0, swing: 0, dead: false, deathT: 0, moveT: 0, jumpReq: false, rec: world.parts.get(hrp), parts: null, restPose: false, airT: 0 };
   if (cf.r) { const fy = D.eulerYXZ(cf.r); ctl.yaw = fy[1]; }
   ctl.parts = {}; for (const n of ['Torso', 'Head', 'Left Arm', 'Right Arm', 'Left Leg', 'Right Leg']) { const p = m.findChild(n); if (p) ctl.parts[n] = p; }
+  ctl.motors = findMotors(m, ctl);
   ctl.rel = new Map();
   const inv = D.cfInverse(cf);
   for (const p of m.descendants()) if (p.isA('BasePart')) { p.charPart = true; const r = world.parts.get(p); if (r) r.inCtl = true; if (!r6 && p !== hrp) ctl.rel.set(p, D.cfMul(inv, p.props.CFrame)); }
   h.ctl = ctl; return ctl;
+}
+// R6 Motor6D joints (if present): limb = Part0 * C0 * anim * Transform * C1^-1 — scripts can tween C0 / set Transform.
+function findMotors(m, ctl) {
+  const out = {}; let n = 0;
+  for (const d of m.descendants()) if (d.className === 'Motor6D' && d.props.Part1) { out[d.props.Name] = d; n++; }
+  if (!out.RootJoint || !out['Right Shoulder']) return null;
+  return n ? out : null;
+}
+function rotZ(a) { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; }
+function motorCF(j, base, ang) {
+  const p = j.props; let t = p.C0;
+  if (ang) t = D.cfMul(t, new CFrame(0, 0, 0, rotZ(ang)));
+  if (p.Transform) t = D.cfMul(t, p.Transform);
+  return D.cfMul(D.cfMul(base, t), D.cfInverse(p.C1));
 }
 function ctlBox(ctl) {
   const c = ctl; const cy = c.pos[1] - c.feet + (c.feet + c.top) / 2, hy = (c.feet + c.top) / 2;
@@ -5799,6 +5892,18 @@ function poseRig(ctl, swing, air, fall) {
   setPart(ctl.hrp, root);
   if (!ctl.r6) { for (const [p, rel] of ctl.rel) if (!p.destroyed) setPart(p, D.cfMul(root, rel)); return; }
   const P = ctl.parts;
+  if (!ctl.motors && ((ctl.motorScan = (ctl.motorScan || 0) + 1) % 30 === 1)) ctl.motors = findMotors(ctl.m, ctl);
+  const M = ctl.motors;
+  if (M && !M.RootJoint.destroyed) {
+    const a = swing * 0.9;
+    const torsoCF = motorCF(M.RootJoint, root, 0);
+    if (P.Torso) setPart(P.Torso, torsoCF);
+    const joint = (name, ang) => { const j = M[name]; if (j && !j.destroyed && j.props.Part1 && !j.props.Part1.destroyed) setPart(j.props.Part1, motorCF(j, torsoCF, ang)); };
+    joint('Neck', 0);
+    joint('Right Shoulder', air ? 2.8 : -a); joint('Left Shoulder', air ? -2.8 : -a);
+    joint('Right Hip', air ? -0.35 : a); joint('Left Hip', air ? -0.35 : a);
+    return;
+  }
   const put = (name, cf) => { if (P[name]) setPart(P[name], D.cfMul(root, cf)); };
   put('Torso', new CFrame(0, 0, 0)); put('Head', new CFrame(0, 1.5, 0));
   const a = swing * 0.9;
@@ -6332,6 +6437,7 @@ function measure(inst, maxW) {
   if (p.TextWrapped && maxW > 0 && w > maxW) { const n = Math.ceil(w / maxW); h = n * size * 1.15 * lines.length; w = maxW; }
   return { w, h };
 }
+layout.measure = measure;
 const udim = (u, base) => u.s * base + u.o;
 function childList(parent) { return parent.children.filter((c) => c.isA('GuiObject')); }
 function findChildOfClass(parent, cls) { for (const c of parent.children) if (c.isA(cls)) return c; return null; }
@@ -6584,4 +6690,4 @@ CLASSES.get('ScrollingFrame').props.get('AbsoluteWindowSize').get = (i) => { lay
 module.exports = { layout, layoutChildren };
 
 };
-var entry=req("rbx/convert.js");window.R2WConv={convert:entry,project:req("rbx/project.js"),headless:null,lexer:req("lua2js/lexer.js")};})();
+var entry=req("rbx/site.js");window.R2WConv={site:entry,convert:req("rbx/convert.js"),project:req("rbx/project.js")};})();
