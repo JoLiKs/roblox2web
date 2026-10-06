@@ -200,15 +200,17 @@ class Instance extends Userdata {
     const nowIn = !!(np && np.dm) || this === ENV.game;
     // events
     if (wasIn && !nowIn) { this.walkDm(false); }
+    // Как в Roblox: DescendantAdded/DescendantRemoving приходят для самого инстанса И для каждого его потомка
+    const sub = this.children.length ? [this, ...this.descendants()] : [this];
     if (old) {
       old.fireSignal('ChildRemoved', this);
-      for (let a = old; a; a = a.parent) a.fireSignal('DescendantRemoving', this);
+      for (let a = old; a; a = a.parent) for (const d of sub) a.fireSignal('DescendantRemoving', d);
     }
     this.fireSignal('AncestryChanged', this, np);
     for (const d of this.descendants()) d.fireSignal('AncestryChanged', this, np);
     if (np) {
       np.fireSignal('ChildAdded', this);
-      for (let a = np; a; a = a.parent) a.fireSignal('DescendantAdded', this);
+      for (let a = np; a; a = a.parent) for (const d of sub) a.fireSignal('DescendantAdded', d);
       if (np.waiters) np.resolveWaiters(this);
     }
     if (!wasIn && nowIn) this.walkDm(true);
