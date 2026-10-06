@@ -20,7 +20,10 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.lua')).sort()) {
   const geoQ = (/--\s*geo:\s*(\S+)/.exec(src) || [])[1];
   let geo = null;
   if (geoQ) { geo = GEO.create({ search: geoQ, navigatorLanguage: (/--\s*navlang:\s*(\S+)/.exec(src) || [])[1] || 'en-US' }); geo.start(); }
-  const { ENV, logs } = runProject(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(v)])), { geo });
+  // -- attrs: Fast=3,Mode=bot   -> Workspace attributes as from ?attr.Fast=3&attr.Mode=bot
+  const attrQ = (/--\s*attrs:\s*(\S+)/.exec(src) || [])[1];
+  const attrs = attrQ ? Object.fromEntries(attrQ.split(',').map((kv) => { const [k, v] = kv.split('='); return [k, isFinite(+v) ? +v : v]; })) : undefined;
+  const { ENV, logs } = runProject(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(v)])), { geo, attrs });
   ENV.simulate(+((/--\s*simulate:\s*(\d+)/.exec(src) || [])[1] || 5));
   let ok = 0, fail = 0, done = false;
   for (const l of logs) { const t = l.text; if (/^OK /.test(t)) ok++; else if (/^FAIL /.test(t)) { fail++; console.log('  ' + f + ': ' + t); } else if (/^DONE/.test(t)) done = true; else if (l.level === 'err' && !/EXPECTED/.test(t)) { fail++; console.log('  ' + f + ' script error: ' + t); } }

@@ -310,6 +310,8 @@ ENV.start = function (opts) {
   const order = [];
   const walk = (n) => { for (const c of n.children) { if (c.isA('BaseScript')) order.push(c); walk(c); } };
   for (const svc of ['ReplicatedFirst', 'Workspace', 'ServerScriptService']) { const s = ENV.svcOrNull(svc); if (s) walk(s); }
+  // Workspace attributes from the page URL (?attr.Name=value) — test/demo switches, visible to scripts from the first frame
+  if (opts.attrs) { const ws = ENV.workspace; if (!ws.attrs) ws.attrs = new Map(); for (const k of Object.keys(opts.attrs)) ws.attrs.set(k, opts.attrs[k]); }
   // server scripts first
   for (const sc of order) if (sc.className === 'Script') startScript(sc);
   // local player joins

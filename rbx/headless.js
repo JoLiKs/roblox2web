@@ -22,7 +22,7 @@ function runProject(files, opts) {
   ENV.onLog = (e) => { logs.push(e); if (opts.echo) console.log(`[${e.who}] ${e.level}: ${e.text}`); };
   ENV.boot({ tree: inlineTree(prj.tree), persist: false, seed: opts.seed === undefined ? 12345 : opts.seed, latency: opts.latency, catalog: (prj.config && prj.config.catalog) || undefined, name: prj.name, placeKey: prj.name });
   ENV.geo = opts.geo || null; // geo.js object (browser boot creates one); null -> GetCountryRegionForPlayerAsync returns 'US'
-  ENV.start({ playerName: opts.playerName, premium: opts.premium, localeId: opts.localeId || (opts.geo && opts.geo.localeId) || undefined });
+  ENV.start({ playerName: opts.playerName, premium: opts.premium, localeId: opts.localeId || (opts.geo && opts.geo.localeId) || undefined, attrs: opts.attrs });
   return { ENV, prj, logs };
 }
 module.exports = { runProject, inlineTree };

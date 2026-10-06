@@ -121,8 +121,34 @@ defClass('Model', 'PVInstance', { props: {
   GetBoundingBox(self) { const b = bboxOf(self); return [new CFrame(b.cx, b.cy, b.cz), v3(b.sx, b.sy, b.sz)]; },
   GetExtentsSize(self) { const b = bboxOf(self); return v3(b.sx, b.sy, b.sz); },
   BreakJoints() { return E; }, MakeJoints() { return E; },
-  GetScale() { return 1; }, ScaleTo() { return E; },
+  GetScale(self) { return self.scaleFactor || 1; },
+  ScaleTo(self, s) { scaleModel(self, s); return E; },
 } });
+// Model:ScaleTo — as in Roblox: sizes/positions of parts around the pivot, joint offsets (Motor6D/Weld C0/C1),
+// attachments and Humanoid.HipHeight scale by newScale / currentScale. Character controllers re-read the rig.
+function scaleModel(self, s) {
+  if (typeof s !== 'number' || !(s > 0) || !isFinite(s)) throw rtError('Model:ScaleTo() expects a positive number');
+  const k = s / (self.scaleFactor || 1);
+  if (Math.abs(k - 1) < 1e-9) return;
+  const piv = I.modelPivot(self);
+  const sc = (c) => new CFrame(c.x * k, c.y * k, c.z * k, c.r);
+  for (const d of self.descendants()) {
+    if (d.isA('BasePart')) {
+      const c = d.props.CFrame, z = d.props.Size;
+      d.setProp('Size', v3(z.x * k, z.y * k, z.z * k));
+      setCF(d, new CFrame(piv.x + (c.x - piv.x) * k, piv.y + (c.y - piv.y) * k, piv.z + (c.z - piv.z) * k, c.r));
+    } else if (d.className === 'Motor6D' || d.className === 'Weld' || d.className === 'ManualWeld' || d.className === 'Snap') {
+      if (d.props.C0) d.setProp('C0', sc(d.props.C0));
+      if (d.props.C1) d.setProp('C1', sc(d.props.C1));
+    } else if (d.className === 'Attachment' && d.props.CFrame) {
+      d.setProp('CFrame', sc(d.props.CFrame));
+    } else if (d.className === 'Humanoid') {
+      d.setProp('HipHeight', (d.props.HipHeight || 0) * k);
+      d.ctl = null; // physics re-reads feet height / joints on the next step
+    }
+  }
+  self.scaleFactor = s;
+}
 defClass('Actor', 'Model');
 function pivotModel(self, cf) {
   const cur = I.modelPivot(self);

@@ -28,6 +28,15 @@ const R2W = {
   ENV,
 };
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// ?attr.Name=value -> Workspace attribute (number / boolean / string); only plain identifiers are accepted
+const urlAttrs = () => {
+  const out = {}; let n = 0;
+  for (const [k, v] of new URLSearchParams(location.search)) {
+    const m = /^attr[._]([A-Za-z][A-Za-z0-9_]{0,40})$/.exec(k); if (!m || n >= 16) continue;
+    out[m[1]] = v === 'true' ? true : v === 'false' ? false : (v !== '' && isFinite(+v) ? +v : String(v).slice(0, 100)); n++;
+  }
+  return out;
+};
 const qs = (k) => { const m = new RegExp('[?&]' + k + '(=([^&]*))?').exec(location.search); return m ? (m[2] === undefined ? '1' : decodeURIComponent(m[2])) : null; };
 
 R2W.start = function (opts) {
@@ -104,7 +113,7 @@ R2W.start = function (opts) {
     new GuiRenderer({ root: stage });
     w3 = new World3D({ THREE: window.THREE, container: stage, preserve: qs('preserve') === '1' });
     ENV.world3d = w3;
-    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId, localeId: geo.localeId });
+    ENV.start({ premium: d.getElementById('r2w-premium').checked, playerName: cfg.playerName || qs('name') || 'Player1', userId: cfg.userId, localeId: geo.localeId, attrs: urlAttrs() });
   } catch (e) {
     addLine({ level: 'err', who: 'boot', text: tx('bootError') + (e && e.stack || e) });
     cons.style.display = 'block'; finishSplash(); console.error(e); return;
