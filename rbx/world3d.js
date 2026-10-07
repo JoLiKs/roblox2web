@@ -357,7 +357,7 @@ class World3D {
     const mk = (css) => { const x = d.createElement('div'); x.className = 'r2w-ui'; x.style.cssText = css; el.appendChild(x); return x; };
     const ring = mk('position:absolute;left:0;top:0;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;background:rgba(255,255,255,.10);border:3px solid rgba(255,255,255,.45);z-index:50;pointer-events:none;display:none;');
     const knob = d.createElement('div'); knob.style.cssText = 'position:absolute;left:33px;top:33px;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.6);'; ring.appendChild(knob);
-    const jump = mk('position:absolute;border-radius:50%;background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.55);touch-action:none;z-index:50;pointer-events:auto;display:flex;align-items:center;justify-content:center;');
+    const jump = mk('position:absolute;border-radius:50%;background:rgba(20,20,30,.32);border:3px solid rgba(255,255,255,.75);touch-action:none;z-index:50;pointer-events:auto;display:flex;align-items:center;justify-content:center;');
     jump.innerHTML = '<svg viewBox="0 0 24 24" style="width:46%;height:46%"><path d="M12 4l7 8h-4v7H9v-7H5z" fill="rgba(255,255,255,.85)"/></svg>';
     jump.title = 'Jump';
     const placeJump = () => { const r = el.getBoundingClientRect(); const small = Math.min(r.width, r.height) <= 500; const sz = small ? 70 : 120; jump.style.width = jump.style.height = sz + 'px'; jump.style.right = (small ? 25 : 50) + 'px'; jump.style.bottom = (small ? 20 : 90) + 'px'; };
