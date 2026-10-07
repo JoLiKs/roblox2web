@@ -108,6 +108,18 @@ const input = ENV.input = {
     const m = ENV.mouse;
     if (m && !gpe) m.fireSignal(btn === 2 ? (down ? 'Button2Down' : 'Button2Up') : (down ? 'Button1Down' : 'Button1Up'));
     if (!gpe && btn === 0 && !down) ENV.clicks.click(x, y);
+    if (btn === 0) input.tool(down && !gpe);
+  },
+  // Tool.Activated / Deactivated: a click or tap in the world (not on GUI) while a Tool is equipped
+  tool(down) {
+    const ch = ENV.localPlayer && ENV.localPlayer.props.Character; if (!ch) return;
+    let t = null; for (const c of ch.children) if (c.className === 'Tool') { t = c; break; }
+    if (!t) return;
+    if (down) {
+      const hum = ch.children.find((c) => c.className === 'Humanoid');
+      if (!hum || hum.props.Health <= 0 || !t.props.Enabled || t.props.ManualActivationOnly || t.toolDown) return;
+      t.toolDown = true; t.fireSignal('Activated');
+    } else if (t.toolDown) { t.toolDown = false; t.fireSignal('Deactivated'); }
   },
   mouseMove(x, y, dx, dy, gpe) {
     input.mousePos = new Vector2(x, y); input.mouseDelta = new Vector2(dx, dy);
@@ -120,6 +132,7 @@ const input = ENV.input = {
     input.lastType = 'Touch';
     input.fire('Touch', 'Unknown', state, v3(x, y, 0), gpe);
     const uis = ENV.svc('UserInputService');
+    if (state === 'Begin') input.tool(!gpe); else if (state === 'End') input.tool(false);
     if (state === 'End' && !gpe) { uis.fireSignal('TouchTap', tbl1(new Vector2(x, y)), false); uis.fireSignal('TouchTapInWorld', new Vector2(x, y), false); ENV.clicks.click(x, y); }
   },
 };

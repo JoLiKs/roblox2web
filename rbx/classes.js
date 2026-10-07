@@ -213,7 +213,7 @@ defClass('AnimationTrack', 'Instance', { noCreate: true, props: { Animation: und
   AdjustSpeed(self, s) { self.setProp('Speed', s); return E; }, AdjustWeight() { return E; }, GetMarkerReachedSignal(self) { return self.signal('Marker'); }, GetTimeOfKeyframe() { return 0; },
 } });
 defClass('Animator', 'Instance', { methods: { LoadAnimation(self, anim) { const t = newInstance('AnimationTrack'); t.props.Animation = anim; return t; }, GetPlayingAnimationTracks() { return new LuaTable(); } } });
-defClass('Tool', 'Instance', { props: { CanBeDropped: true, Enabled: true, Grip: new CFrame(0, 0, 0), ManualActivationOnly: false, RequiresHandle: true, ToolTip: '', TextureId: '' }, events: ['Activated', 'Deactivated', 'Equipped', 'Unequipped'], methods: { Activate(self) { self.fireSignal('Activated'); return E; } } });
+defClass('Tool', 'Instance', { props: { CanBeDropped: true, Enabled: true, Grip: new CFrame(0, 0, 0), ManualActivationOnly: false, RequiresHandle: true, ToolTip: '', TextureId: '' }, events: ['Activated', 'Deactivated', 'Equipped', 'Unequipped'], methods: { Activate(self) { self.fireSignal('Activated'); return E; }, Deactivate(self) { self.fireSignal('Deactivated'); return E; } } });
 defClass('Backpack', 'Instance');
 defClass('StarterGear', 'Instance');
 
@@ -254,8 +254,8 @@ methods: {
   SetStateEnabled() { return E; }, GetStateEnabled() { return true; },
   LoadAnimation(self) { return newInstance('AnimationTrack'); },
   GetPlayingAnimationTracks() { return new LuaTable(); },
-  EquipTool(self, tool) { if (self.parent) tool.setParent(self.parent); return E; },
-  UnequipTools() { return E; },
+  EquipTool(self, tool) { if (self.parent && tool && tool.className === 'Tool') tool.setParent(self.parent); return E; },
+  UnequipTools(self) { const ch = self.parent; if (!ch) return E; const pl = ENV.svc('Players').children.find((p) => p.props.Character === ch); const bp = pl && pl.findChild('Backpack'); for (const c of ch.children.slice()) if (c.className === 'Tool') { if (bp) c.setParent(bp); } return E; },
   AddAccessory() { return E; }, RemoveAccessories() { return E; }, GetAccessories() { return new LuaTable(); },
   ApplyDescription() { return E; }, GetAppliedDescription() { return undefined; }, BuildRigFromAttachments() { return E; },
   ReplaceBodyPartR15() { return false; },

@@ -512,7 +512,7 @@ defMethods('PolicyService', { GetPolicyInfoForPlayerAsync: function* (self, p) {
 defMethods('TextService', { GetTextSize(self, text, size, font, bounds) { return ENV.textSize ? ENV.textSize(text, size, font, bounds ? bounds.x : 1e9) : new Vector2(text.length * size * 0.5, size * 1.2); }, FilterStringAsync: function* (self, text) { return { filtered: text }; }, });
 defMethods('TeleportService', { Teleport() { noteUnsupported('TeleportService:Teleport'); ENV.warn('TeleportService is not supported in the browser demo (teleport ignored)'); return E; }, TeleportAsync() { noteUnsupported('TeleportService:TeleportAsync'); ENV.warn('TeleportService is not supported in the browser demo (teleport ignored)'); return E; }, GetLocalPlayerTeleportData() { return undefined; }, });
 defMethods('BadgeService', { AwardBadge() { return true; }, UserHasBadgeAsync: function* () { return false; }, GetBadgeInfoAsync: function* () { return new LuaTable(); } });
-defMethods('GuiService', { GetGuiInset() { return [new Vector2(0, 0), new Vector2(0, 0)]; }, IsTenFootInterface() { return false; }, GetScreenResolution() { return ENV.viewport ? ENV.viewport() : new Vector2(1280, 720); }, SetMenuIsOpen() { return E; } });
+defMethods('GuiService', { GetGuiInset() { return [new Vector2(0, ENV.layout ? ENV.layout.inset : 36), new Vector2(0, 0)]; }, IsTenFootInterface() { return false; }, GetScreenResolution() { return ENV.viewport ? ENV.viewport() : new Vector2(1280, 720); }, SetMenuIsOpen() { return E; } });
 CLASSES.get('GuiService').props.set('MenuIsOpen', { def: false });
 CLASSES.get('GuiService').props.set('SelectedObject', { def: undefined });
 CLASSES.get('GuiService').props.set('TouchControlsEnabled', { def: true });

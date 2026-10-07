@@ -6,7 +6,7 @@ const D = require('./datatypes');
 const I = require('./instance');
 const S = require('./services');
 const CL = require('./classes');
-const { ENV, Instance, CLASSES } = I;
+const { ENV, Instance, CLASSES, newInstance } = I;
 const { Vector3, CFrame, v3 } = D;
 const En = (t, n) => D.EnumLib.lget(t).lget(n);
 
@@ -257,9 +257,9 @@ function rebuildAssemblies() {
   const parent = new Map(); const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
   const edges = [];
   for (const rec of world.parts.values()) {
-    for (const ch of rec.inst.children) if ((ch.className === 'WeldConstraint' || ch.className === 'Weld') && ch.props.Enabled !== false) { const a = ch.props.Part0, b = ch.props.Part1; if (a && b && world.parts.has(a) && world.parts.has(b)) edges.push([a, b]); }
+    for (const ch of rec.inst.children) if ((ch.className === 'WeldConstraint' || ch.className === 'Weld') && ch.props.Enabled !== false) { const a = ch.props.Part0, b = ch.props.Part1; if (a && b && world.parts.has(a) && world.parts.has(b) && !a.charPart && !b.charPart) edges.push([a, b]); }
   }
-  for (const p of world.parts.keys()) { p.free = false; world.parts.get(p).root = null; }
+  for (const p of world.parts.keys()) { p.free = false; const r = world.parts.get(p); r.root = null; r.follower = false; }
   for (const [a, b] of edges) { if (!parent.has(a)) parent.set(a, a); if (!parent.has(b)) parent.set(b, b); parent.set(find(a), find(b)); }
   const groups = new Map();
   for (const p of parent.keys()) { const r = find(p); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(p); }
@@ -377,6 +377,7 @@ function poseRig(ctl, swing, air, fall) {
     joint('Neck', 0);
     joint('Right Shoulder', air ? 2.8 : -a); joint('Left Shoulder', air ? -2.8 : -a);
     joint('Right Hip', air ? -0.35 : a); joint('Left Hip', air ? -0.35 : a);
+    holdTool(ctl);
     return;
   }
   const put = (name, cf) => { if (P[name]) setPart(P[name], D.cfMul(root, cf)); };
@@ -386,7 +387,50 @@ function poseRig(ctl, swing, air, fall) {
   const leg = (x, ang) => { const R = rotX(ang); const o = D.rotVec(R, v3(0, -1, 0)); return new CFrame(x, -1 + o.y, o.z, R); };
   put('Left Arm', arm(-1.5, air ? 2.8 : a)); put('Right Arm', arm(1.5, air ? 2.8 : -a));
   put('Left Leg', leg(-0.5, air ? 0.35 : -a)); put('Right Leg', leg(0.5, air ? -0.35 : a));
+  holdTool(ctl);
 }
+/* ------------------------------------------------ Tools: equip (parent -> character), RightGrip, Handle in the right hand */
+// Roblox RightGrip: Part0 = Right Arm, Part1 = Handle, C0 = CFrame(0,-1,0) * Angles(-90°,0,0), C1 = Tool.Grip
+const GRIP_C0 = new CFrame(0, -1, 0, [1, 0, 0, 0, 0, 1, 0, -1, 0]);
+const humOf = (m) => (m && m.className === 'Model' ? m.children.find((c) => c.className === 'Humanoid') : null);
+function holdTool(ctl) {
+  const m = ctl.m; let tool = null;
+  for (const c of m.children) if (c.className === 'Tool') { tool = c; break; }
+  if (!tool || !tool.held) return;
+  const arm = m.findChild('Right Arm') || m.findChild('RightHand'); const h = tool.held.handle;
+  if (!arm || !h || h.destroyed || h.parent == null) return;
+  const hcf = D.cfMul(D.cfMul(arm.props.CFrame, GRIP_C0), D.cfInverse(tool.props.Grip || new CFrame(0, 0, 0)));
+  setPart(h, hcf);
+  for (const [p, rel] of tool.held.rel) if (!p.destroyed && tool.isAncestorOf(p)) setPart(p, D.cfMul(hcf, rel));
+}
+function toolParts(tool) { return tool.descendants().filter((d) => d.isA('BasePart')); }
+ENV.onToolParent = function (tool, old, np) {
+  const fire = (n, ...a) => { try { tool.fireSignal(n, ...a); } catch (e) { /* */ } };
+  if (old && humOf(old) && tool.held) {
+    const arm = old.findChild('Right Arm') || old.findChild('RightHand'); const g = arm && arm.findChild('RightGrip');
+    if (g && g.props.Part1 === tool.held.handle) g.destroy();
+    for (const p of toolParts(tool)) { p.charPart = false; const r = world.parts.get(p); if (r) r.inCtl = false; }
+    tool.held = null; world.asmDirty = true;
+    if (tool.toolDown) { tool.toolDown = false; fire('Deactivated'); }
+    fire('Unequipped');
+  }
+  if (np && humOf(np) && np.findChild('HumanoidRootPart')) {
+    const pl = ENV.svc('Players').children.find((p) => p.props.Character === np); const bp = pl && pl.findChild('Backpack');
+    for (const c of np.children.slice()) if (c !== tool && c.className === 'Tool' && bp) c.setParent(bp); // one tool in hand
+    if (tool.parent !== np) return;
+    const handle = tool.findChild('Handle');
+    const held = { handle: handle && handle.isA('BasePart') ? handle : null, rel: new Map() };
+    const hinv = held.handle ? D.cfInverse(held.handle.props.CFrame) : null;
+    for (const p of toolParts(tool)) {
+      p.charPart = true; const r = world.parts.get(p); if (r) r.inCtl = true;
+      if (held.handle && p !== held.handle) held.rel.set(p, D.cfMul(hinv, p.props.CFrame));
+    }
+    tool.held = held; world.asmDirty = true;
+    const arm = np.findChild('Right Arm') || np.findChild('RightHand');
+    if (arm && held.handle) { const w = newInstance('Weld'); w.props.Name = 'RightGrip'; w.props.Part0 = arm; w.props.Part1 = held.handle; w.props.C0 = GRIP_C0; w.props.C1 = tool.props.Grip || new CFrame(0, 0, 0); w.setParent(arm); }
+    fire('Equipped', pl && pl.isLocal && ENV.input ? ENV.input.mouse(pl) : undefined);
+  }
+};
 function ctlStep(h, dt, ctl) {
   const hrp = ctl.hrp;
   const m = ctl.m;

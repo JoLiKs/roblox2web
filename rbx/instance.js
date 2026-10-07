@@ -213,6 +213,7 @@ class Instance extends Userdata {
       for (let a = np; a; a = a.parent) for (const d of sub) a.fireSignal('DescendantAdded', d);
       if (np.waiters) np.resolveWaiters(this);
     }
+    if (this.className === 'Tool' && ENV.onToolParent) ENV.onToolParent(this, old, np);
     if (!wasIn && nowIn) this.walkDm(true);
     this.changed('Parent');
   }

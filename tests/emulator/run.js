@@ -24,7 +24,19 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.lua')).sort()) {
   const attrQ = (/--\s*attrs:\s*(\S+)/.exec(src) || [])[1];
   const attrs = attrQ ? Object.fromEntries(attrQ.split(',').map((kv) => { const [k, v] = kv.split('='); return [k, isFinite(+v) ? +v : v]; })) : undefined;
   const { ENV, logs } = runProject(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, Buffer.from(v)])), { geo, attrs });
-  ENV.simulate(+((/--\s*simulate:\s*(\d+)/.exec(src) || [])[1] || 5));
+  const total_t = +((/--\s*simulate:\s*(\d+)/.exec(src) || [])[1] || 5);
+  // -- input: 3=down,3.2=up,4=tdown,4.1=tup,5=gdown   -> world mouse/touch input at virtual times (g = over GUI, game processed)
+  const inQ = (/--\s*input:\s*(\S+)/.exec(src) || [])[1];
+  if (inQ) {
+    let now = 0;
+    for (const ev of inQ.split(',').map((kv) => kv.split('=')).sort((a, b) => a[0] - b[0])) {
+      const t = +ev[0]; if (t > now) { ENV.simulate(t - now); now = t; }
+      const k = ev[1], gpe = k[0] === 'g', kk = gpe ? k.slice(1) : k;
+      if (kk === 'down' || kk === 'up') ENV.input.mouseButton(0, kk === 'down', 100, 100, gpe);
+      else if (kk === 'tdown' || kk === 'tup') ENV.input.touch(kk === 'tdown' ? 'Begin' : 'End', 100, 100, gpe);
+    }
+    if (total_t > now) ENV.simulate(total_t - now);
+  } else ENV.simulate(total_t);
   let ok = 0, fail = 0, done = false;
   for (const l of logs) { const t = l.text; if (/^OK /.test(t)) ok++; else if (/^FAIL /.test(t)) { fail++; console.log('  ' + f + ': ' + t); } else if (/^DONE/.test(t)) done = true; else if (l.level === 'err' && !/EXPECTED/.test(t)) { fail++; console.log('  ' + f + ' script error: ' + t); } }
   total += ok + fail; bad += fail + (done ? 0 : 1);
