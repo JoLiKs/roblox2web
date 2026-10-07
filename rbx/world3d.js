@@ -305,6 +305,7 @@ class World3D {
       if (e.target.closest && e.target.closest('.r2w-ui')) return;
       const r = rr(), x = e.clientX - r.left, y = e.clientY - r.top;
       const gpe = guiTarget(e);
+      if (e.pointerType === 'touch' && !gpe && self.thumbStart && self.thumbZone(x, y) && self.thumbStart(e, x, y)) return;
       if (e.pointerType === 'touch') { input.touch('Begin', x, y, gpe); }
       else input.mouseButton(e.button, true, x, y, gpe);
       if (!gpe && (e.button === 2 || e.pointerType === 'touch' || e.button === 0)) {
@@ -314,6 +315,7 @@ class World3D {
       }
     });
     el.addEventListener('pointermove', (e) => {
+      if (self.thumbMove && self.thumbMove(e)) return;
       const r = rr(), x = e.clientX - r.left, y = e.clientY - r.top;
       const dx = drag ? e.clientX - drag.x : e.movementX || 0, dy = drag ? e.clientY - drag.y : e.movementY || 0;
       input.mouseMove(x, y, e.movementX || 0, e.movementY || 0, false);
@@ -326,6 +328,7 @@ class World3D {
       }
     });
     const up = (e) => {
+      if (self.thumbEnd && self.thumbEnd(e)) return;
       const r = rr(), x = e.clientX - r.left, y = e.clientY - r.top;
       const gpe = guiTarget(e);
       const wasDrag = drag && e.pointerId === drag.id;
@@ -334,7 +337,7 @@ class World3D {
       if (wasDrag) drag = null;
     };
     el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', () => { drag = null; });
+    el.addEventListener('pointercancel', (e) => { if (self.thumbEnd) self.thumbEnd(e); drag = null; });
     el.addEventListener('wheel', (e) => { if (guiTarget(e)) return; e.preventDefault(); if (!ENV.cameraLocked) cam.dist = Math.max(cam.minDist, Math.min(cam.maxDist, cam.dist * (1 + Math.sign(e.deltaY) * 0.1))); input.wheel(-Math.sign(e.deltaY), false); }, { passive: false });
     window.addEventListener('keydown', (e) => {
       const tag = e.target && e.target.tagName;
@@ -348,18 +351,25 @@ class World3D {
     if (touch) this.touchControls();
   }
   touchControls() {
+    // Как в Roblox (DynamicThumbstick + TouchJumpButton): джойстик появляется там, где палец коснулся
+    // левой нижней части экрана (не GUI), кнопка прыжка — справа снизу (70 px на малых экранах, 120 px на больших).
     const el = this.container, input = ENV.input; const d = document;
     const mk = (css) => { const x = d.createElement('div'); x.className = 'r2w-ui'; x.style.cssText = css; el.appendChild(x); return x; };
-    const pad = mk('position:absolute;left:24px;bottom:28px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.35);touch-action:none;z-index:50;pointer-events:auto;');
-    const knob = d.createElement('div'); knob.style.cssText = 'position:absolute;left:35px;top:35px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.55);'; pad.appendChild(knob);
-    const jump = mk('position:absolute;right:30px;bottom:50px;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,.25);border:2px solid rgba(255,255,255,.5);color:#fff;font:700 15px system-ui;display:flex;align-items:center;justify-content:center;touch-action:none;z-index:50;pointer-events:auto;');
-    jump.textContent = 'Прыжок';
-    let pid = null;
-    const upd = (e) => { const r = pad.getBoundingClientRect(); let x = (e.clientX - r.left - 65) / 50, y = (e.clientY - r.top - 65) / 50; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } input.joy = [x, y]; knob.style.left = (35 + x * 35) + 'px'; knob.style.top = (35 + y * 35) + 'px'; };
-    pad.addEventListener('pointerdown', (e) => { pid = e.pointerId; pad.setPointerCapture(pid); upd(e); e.stopPropagation(); });
-    pad.addEventListener('pointermove', (e) => { if (e.pointerId === pid) upd(e); });
-    const end = (e) => { if (e.pointerId === pid) { pid = null; input.joy = [0, 0]; knob.style.left = '35px'; knob.style.top = '35px'; } };
-    pad.addEventListener('pointerup', end); pad.addEventListener('pointercancel', end);
+    const ring = mk('position:absolute;left:0;top:0;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;background:rgba(255,255,255,.10);border:3px solid rgba(255,255,255,.45);z-index:50;pointer-events:none;display:none;');
+    const knob = d.createElement('div'); knob.style.cssText = 'position:absolute;left:33px;top:33px;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.6);'; ring.appendChild(knob);
+    const jump = mk('position:absolute;border-radius:50%;background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.55);touch-action:none;z-index:50;pointer-events:auto;display:flex;align-items:center;justify-content:center;');
+    jump.innerHTML = '<svg viewBox="0 0 24 24" style="width:46%;height:46%"><path d="M12 4l7 8h-4v7H9v-7H5z" fill="rgba(255,255,255,.85)"/></svg>';
+    jump.title = 'Jump';
+    const placeJump = () => { const r = el.getBoundingClientRect(); const small = Math.min(r.width, r.height) <= 500; const sz = small ? 70 : 120; jump.style.width = jump.style.height = sz + 'px'; jump.style.right = (small ? 25 : 50) + 'px'; jump.style.bottom = (small ? 20 : 90) + 'px'; };
+    placeJump(); window.addEventListener('resize', placeJump);
+    let pid = null, cx = 0, cy = 0;
+    const R = 50;
+    const upd = (e) => { const r = el.getBoundingClientRect(); let x = (e.clientX - r.left - cx) / R, y = (e.clientY - r.top - cy) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; } input.joy = [x, y]; knob.style.left = (33 + x * 36) + 'px'; knob.style.top = (33 + y * 36) + 'px'; };
+    // зона джойстика: левая половина, нижние 60 % экрана; касание GUI сюда не попадает (у GUI свой обработчик)
+    this.thumbZone = (x, y) => { const r = el.getBoundingClientRect(); return x < r.width * 0.5 && y > r.height * 0.4; };
+    this.thumbStart = (e, x, y) => { if (pid !== null) return false; pid = e.pointerId; cx = x; cy = y; ring.style.left = x + 'px'; ring.style.top = y + 'px'; ring.style.display = 'block'; upd(e); try { el.setPointerCapture(pid); } catch (er) { /* */ } return true; };
+    this.thumbMove = (e) => { if (e.pointerId !== pid) return false; upd(e); return true; };
+    this.thumbEnd = (e) => { if (e.pointerId !== pid) return false; pid = null; input.joy = [0, 0]; ring.style.display = 'none'; knob.style.left = '33px'; knob.style.top = '33px'; return true; };
     jump.addEventListener('pointerdown', (e) => { input.jump = true; ENV.svc('UserInputService').fireSignal('JumpRequest'); e.stopPropagation(); });
     jump.addEventListener('pointerup', () => { input.jump = false; }); jump.addEventListener('pointercancel', () => { input.jump = false; });
   }
