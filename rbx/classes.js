@@ -150,10 +150,26 @@ function scaleModel(self, s) {
   self.scaleFactor = s;
 }
 defClass('Actor', 'Model');
+// Roblox держит поворот CFrame ортонормированным; без этого cf * inverse(cur) * cur копит ошибку
+// (inverse = транспонирование) и после тысяч PivotTo матрица «взрывается».
+function orthoCF(c) {
+  const r = c.r;
+  let ax = r[0], ay = r[3], az = r[6], bx = r[1], by = r[4], bz = r[7];
+  const la = Math.hypot(ax, ay, az), lb = Math.hypot(bx, by, bz), dab = ax * bx + ay * by + az * bz;
+  if (Math.abs(la - 1) < 1e-9 && Math.abs(lb - 1) < 1e-9 && Math.abs(dab) < 1e-9) return c;
+  if (!(la > 1e-12) || !isFinite(la)) return new D.CFrame(c.x, c.y, c.z);
+  ax /= la; ay /= la; az /= la;
+  const d = ax * bx + ay * by + az * bz; bx -= d * ax; by -= d * ay; bz -= d * az;
+  const lb2 = Math.hypot(bx, by, bz);
+  if (!(lb2 > 1e-12) || !isFinite(lb2)) return new D.CFrame(c.x, c.y, c.z);
+  bx /= lb2; by /= lb2; bz /= lb2;
+  const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+  return new D.CFrame(c.x, c.y, c.z, [ax, bx, cx, ay, by, cy, az, bz, cz]);
+}
 function pivotModel(self, cf) {
-  const cur = I.modelPivot(self);
-  const delta = D.cfMul(cf, D.cfInverse(cur));
-  for (const d of self.descendants()) if (d.isA('BasePart')) setCF(d, D.cfMul(delta, d.props.CFrame));
+  const cur = orthoCF(I.modelPivot(self));
+  const delta = orthoCF(D.cfMul(cf, D.cfInverse(cur)));
+  for (const d of self.descendants()) if (d.isA('BasePart')) setCF(d, orthoCF(D.cfMul(delta, d.props.CFrame)));
   if (self.props.WorldPivot) self.props.WorldPivot = D.cfMul(delta, self.props.WorldPivot);
 }
 function bboxOf(m) {
