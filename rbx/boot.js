@@ -21,7 +21,7 @@ const UI_TEXT = {
 
 const chunks = []; const errors = []; let game = null; let started = false;
 const R2W = {
-  version: '2.3.0',
+  version: '2.4.0',
   chunk(id, name, factory) { ENV.chunkFactories.set(id, factory); C.ST.chunks[id] = name; chunks.push(id); },
   chunkError(id, name, msg) { errors.push({ id, name, msg }); },
   setGame(g) { game = g; R2W.game = g; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => R2W.start()); else setTimeout(() => R2W.start(), 0); },
@@ -107,7 +107,7 @@ R2W.start = function (opts) {
   let w3;
   try {
     const cfg = game.config || {};
-    ENV.boot({ tree: game.tree, persist: qs('persist') !== '0', seed: qs('seed') ? +qs('seed') : undefined, catalog: cfg.catalog, name: game.name, placeKey: cfg.placeKey || game.name, autoPurchase: qs('autobuy') === '1', latency: qs('latency') ? +qs('latency') : undefined });
+    ENV.boot({ tree: game.tree, persist: qs('persist') !== '0', seed: qs('seed') ? +qs('seed') : undefined, catalog: cfg.catalog, assets: game.assets, name: game.name, placeKey: cfg.placeKey || game.name, autoPurchase: qs('autobuy') === '1', latency: qs('latency') ? +qs('latency') : undefined });
     let maxId = 0; for (const id of chunks) maxId = Math.max(maxId, id); ENV.rt.chunkCount = Math.max(ENV.rt.chunkCount || 0, maxId);
     if (cfg.lighting) {/* reserved */}
     new GuiRenderer({ root: stage });

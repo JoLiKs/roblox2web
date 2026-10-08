@@ -19,6 +19,10 @@ const ctxName = () => { const c = CO.current ? CO.current.ctx : null; return c ?
 /* ------------------------------------------------------------------ service classes */
 const SERVICE_NAMES = ['Workspace', 'Players', 'Lighting', 'ReplicatedStorage', 'ReplicatedFirst', 'ServerStorage', 'ServerScriptService', 'StarterGui', 'StarterPack', 'StarterPlayer', 'SoundService', 'Chat', 'Teams', 'TextChatService', 'RunService', 'TweenService', 'Debris', 'CollectionService', 'HttpService', 'DataStoreService', 'MemoryStoreService', 'MessagingService', 'MarketplaceService', 'PolicyService', 'UserInputService', 'ContextActionService', 'ProximityPromptService', 'GuiService', 'TextService', 'TeleportService', 'BadgeService', 'PathfindingService', 'PhysicsService', 'LocalizationService', 'GroupService', 'SocialService', 'VRService', 'AnalyticsService', 'ContentProvider', 'HapticService', 'AssetService', 'InsertService', 'Stats', 'LogService', 'ScriptContext', 'GamepadService', 'MaterialService', 'TestService', 'AvatarEditorService', 'VoiceChatService', 'StarterPlayerScripts', 'StarterCharacterScripts', 'NetworkClient', 'NetworkServer', 'PlayerGui', 'UserGameSettings', 'RbxAnalyticsService', 'CoreGui', 'Selection', 'ChangeHistoryService', 'ServiceProvider', 'TimerService', 'ExperienceService', 'CaptureService', 'MouseService', 'ReplicatedFirstX'];
 const stubSvc = new Set();
+// ReplicatedFirst: свой экран загрузки (RemoveDefaultLoadingScreen) — в браузере стандартного экрана Roblox нет, вызов ничего не делает
+defClass('ReplicatedFirst', 'Instance', { service: true, events: ['FinishedReplicating', 'RemoveDefaultLoadingGuiSignal'], methods: {
+  RemoveDefaultLoadingScreen() { return E; }, IsFinishedReplicating: () => true, SetDefaultLoadingGuiRemoved() { return E; },
+} });
 for (const n of SERVICE_NAMES) {
   if (!CLASSES.has(n) && !['StarterPlayerScripts', 'StarterCharacterScripts', 'PlayerGui', 'ReplicatedFirstX'].includes(n)) { defClass(n, 'Instance', { service: true }); stubSvc.add(n); }
 }

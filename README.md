@@ -37,8 +37,10 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
   "placeKey": "my-game",
   "patches": [
     { "script": "Shared.Config", "regex": "(\\bVIP\\s*=\\s*)0,", "replace": "$1900004," },
-    { "script": "Shared.Config", "find": "DEBUG = false", "replace": "DEBUG = true" }
+    { "script": "Shared.Config", "find": "DEBUG = false", "replace": "DEBUG = true" },
+    { "script": "Shared.Config", "regex": "(\\bLOGO\\s*=\\s*)0,", "replace": "$1920001," }
   ],
+  "assets": { "920001": "assets/icon_512.png" },
   "catalog": {
     "gamepasses": { "900004": { "name": "VIP", "price": 599, "description": "..." } },
     "products": {}
@@ -48,12 +50,13 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
 
 * `patches` — правки исходников **только в веб-версии** (подстановка демо-ID геймпассов и т. п.), оригинал не меняется; в отчёте предупреждение, если ничего не нашлось.
 * `catalog` — названия/цены для демо-диалога покупок.
+* `assets` — картинки вместо ассетов Roblox (2.4): `"<ID ассета>": "путь/к/картинке.png"` внутри проекта (png/jpg/gif/webp/svg). Файл копируется в сайт (`assets/…`), а `ImageLabel`/`ImageButton` с `Image = "rbxassetid://<ID>"` (а также `http://www.roblox.com/asset/?id=<ID>` и `rbxthumb://type=Asset&id=<ID>…`) показывают его. Нечисловой ID, путь с `..`, не картинка или отсутствующий файл — предупреждение в отчёте. Если в исходниках ID ещё 0, подставьте демо-ID патчем (пример выше).
 
 ## Тесты
 
 ```bash
 cd tests/conformance && node harness.js     # 528 кейсов, 9 файлов — результаты сверяются с эталонным интерпретатором luau
-node tests/emulator/run.js                  # 185 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, LocalizationService/гео-IP, ScaleTo, NPC MoveTo, ?attr., DescendantAdded поддерева, Tool, PivotTo без дрейфа, …)
+node tests/emulator/run.js                  # 193 проверки эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, LocalizationService/гео-IP, ScaleTo, NPC MoveTo, ?attr., DescendantAdded поддерева, Tool, PivotTo без дрейфа, "assets" конфига, ReplicatedFirst, …)
 python3 tests/browser/test_sites.py         # Chromium: 3 синтетических проекта (obby, tycoon, GUI-приложение)
 python3 tests/browser/test_online.py        # Chromium: онлайн-конвертор
 ```
@@ -71,6 +74,11 @@ vendor/     three.min.js r149, jszip
 tests/      conformance, emulator, browser
 roblox2web.py   резервный конвертор v1 (шаблонный, только pet-sim): --mode template
 ```
+
+## Что нового в 2.4
+* **Свои картинки вместо `rbxassetid://`**: раздел `"assets"` в `roblox2web.config.json` (см. выше) — логотипы, иконки и т. п. в веб-версии выглядят как в Roblox; работает и в CLI, и в онлайн-конверторе (в предпросмотре — как data:URL).
+* **`ReplicatedFirst`**: LocalScript'ы оттуда запускаются, `RemoveDefaultLoadingScreen()`, `IsFinishedReplicating()` — свой экран загрузки игры работает (стандартного экрана Roblox в браузере нет).
+* **`GuiObject.Rotation` вокруг центра элемента**, как в Roblox (раньше — вокруг `AnchorPoint`, повёрнутые элементы с AnchorPoint ≠ 0.5 смещались).
 
 ## Что нового в 2.3
 * **`Tool`**: `Equipped`/`Unequipped` при смене родителя (Backpack ↔ персонаж), в руке только один инструмент, `RightGrip` + `Handle` в правой руке (с учётом `Grip`), `Activated`/`Deactivated` по клику/тапу в мир (не по GUI), `Humanoid:UnequipTools()`, `Tool:Deactivate()`; `GuiService:GetGuiInset()` = высота верхней панели (тест `12_tools`, директива `-- input:`).

@@ -49,10 +49,20 @@
       if (e instanceof C.project.ConvertError) setStatus('Ошибка: ' + e.userMessage, true); else { console.error(e); setStatus('Внутренняя ошибка: ' + (e && e.message), true); }
     }
   }
+  const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml' };
+  function assetUrls(site) { // картинки "assets" конфига -> data:URL (предпросмотр открыт из blob:, относительные пути не работают)
+    const out = {};
+    for (const k of Object.keys(site)) {
+      if (!/^assets\//.test(k)) continue; const v = site[k]; const u8 = typeof v === 'string' ? new TextEncoder().encode(v) : v;
+      let bin = ''; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+      out[k] = 'data:' + (MIME[(k.split('.').pop() || '').toLowerCase()] || 'application/octet-stream') + ';base64,' + btoa(bin);
+    }
+    return out;
+  }
   function previewHtml(site) {
     // single-file HTML: inline all scripts
     const esc = (s) => s.replace(/<\/script/gi, '<\\/script');
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;background:#111;overflow:hidden}</style></head><body><div id="r2w-root"></div><script>${esc(site['vendor/three.min.js'])}</script><script>${esc(site['runtime.js'])}</script><script>${esc(site['game.bundle.js'])}</script></body></html>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%;background:#111;overflow:hidden}</style></head><body><div id="r2w-root"></div><script>window.R2W_ASSET_URLS=${esc(JSON.stringify(assetUrls(site)))};</script><script>${esc(site['vendor/three.min.js'])}</script><script>${esc(site['runtime.js'])}</script><script>${esc(site['game.bundle.js'])}</script></body></html>`;
   }
   $('previewBtn').onclick = () => {
     if (!lastSite) return; const f = $('preview'); f.classList.remove('hidden');

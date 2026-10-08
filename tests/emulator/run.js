@@ -46,6 +46,8 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.lua')).sort()) {
   const g = await require('./geo_cases')(); // geo.js unit tests (fetch chain, timeouts, parsing) with a fake fetch
   total += g.ok + g.fail; bad += g.fail;
   console.log(`${g.fail ? 'FAIL' : 'ok  '} geo_cases.js: ${g.ok} ok, ${g.fail} failed`);
+  const a = require('./asset_cases')(); total += a.ok + a.fail; bad += a.fail;
+  console.log(`${a.fail ? 'FAIL' : 'ok  '} asset_cases.js: ${a.ok} ok, ${a.fail} failed`);
   console.log(`${total} checks, ${bad} problems`);
   process.exit(bad ? 1 : 0);
 })();

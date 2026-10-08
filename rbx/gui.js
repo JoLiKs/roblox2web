@@ -260,7 +260,7 @@ class GuiRenderer {
     if (stroke && !(isText && stroke.ApplyStrokeMode.name === 'Contextual')) { const th = stroke.Thickness; shadows.length = 0; shadows.push(`0 0 0 ${th}px ${css(stroke.Color, 1 - stroke.Transparency)}`); }
     set('boxShadow', shadows.join(','));
     if (p.Rotation) set('transform', `rotate(${p.Rotation}deg)${scale !== 1 ? ` scale(${scale})` : ''}`); else set('transform', scale !== 1 ? `scale(${scale})` : 'none');
-    set('transformOrigin', `${(p.AnchorPoint ? p.AnchorPoint.x * 100 : 0)}% ${(p.AnchorPoint ? p.AnchorPoint.y * 100 : 0)}%`);
+    set('transformOrigin', '50% 50%'); // как в Roblox: Rotation вокруг центра элемента (не AnchorPoint)
     if (i.isA('GuiButton') || i.isA('TextBox')) set('cursor', i.isA('GuiButton') ? 'pointer' : 'text');
     if (i.className === 'ScrollingFrame') this.styleScroll(i, rec);
     if (isText) this.styleText(i, rec, stroke, rpx);
@@ -362,7 +362,9 @@ class GuiRenderer {
   styleImage(i, rec) {
     const p = i.props, im = rec.img; const src = p.Image || '';
     let url = null;
-    if (/^(https?:|data:|\.\/|assets\/|blob:)/.test(src)) url = src;
+    const am = /^rbxassetid:\/\/(\d+)$/.exec(src) || /^(?:https?:\/\/www\.roblox\.com\/asset\/?\?id=|rbxthumb:\/\/type=Asset&id=)(\d+)/.exec(src);
+    if (am && ENV.assetMap && ENV.assetMap[am[1]]) { const sp = ENV.assetMap[am[1]]; const inl = typeof window !== 'undefined' && window.R2W_ASSET_URLS; url = (inl && inl[sp]) || sp; } // картинка из "assets" roblox2web.config.json (в предпросмотре онлайн-конвертора — data:URL)
+    else if (/^(https?:|data:|\.\/|assets\/|blob:)/.test(src)) url = src;
     else if (src && !this.warnedImages.has(src)) { this.warnedImages.add(src); noteUnsupported('ImageLabel.Image ' + (src.startsWith('rbxassetid') ? 'rbxassetid://… (Roblox assets are not available offline)' : src)); ENV.log('warn', 'r2w', '[unsupported] image ' + src + ' cannot be loaded in the browser (shown as a placeholder)'); }
     if (url && rec.last.img !== url) { rec.last.img = url; im.src = url; }
     im.style.display = url ? 'block' : 'none';

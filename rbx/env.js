@@ -289,6 +289,7 @@ ENV.boot = function (opts) {
   ENV.placeKey = opts.placeKey || 'game';
   ENV.persist = opts.persist !== false;
   ENV.market.catalog = opts.catalog || ENV.market.catalog;
+  ENV.assetMap = opts.assets || {}; // "assets" конфига: id ассета -> путь картинки в сайте
   ENV.market.autoPurchase = opts.autoPurchase !== false;
   ENV.errorCount = 0;
   ENV.makeDataModel({ name: opts.name, seed: opts.seed });

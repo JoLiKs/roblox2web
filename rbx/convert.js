@@ -6,7 +6,7 @@ const P = require('./project');
 const D = require('./datatypes');
 const I = require('./instance');
 const { CLASSES } = I;
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 
 const SVC_LIBS = new Set(['string', 'table', 'math', 'os', 'bit32', 'utf8', 'coroutine', 'debug', 'task']);
 let supportedCache = null;
@@ -177,7 +177,7 @@ function bundleJs(result, prj, meta) {
     if (c.error) parts.push(`R.chunkError(${c.id},${JSON.stringify(c.name)},${JSON.stringify(c.error)});`);
     else parts.push(`R.chunk(${c.id},${JSON.stringify(c.name)},${c.code});`);
   }
-  const game = { name: prj.name, kind: prj.kind, tree: treeSpec(result.tree), config: prj.config || {}, report: result.report, meta: meta || {} };
+  const game = { name: prj.name, kind: prj.kind, tree: treeSpec(result.tree), config: prj.config || {}, assets: prj.assetMap || {}, report: result.report, meta: meta || {} };
   parts.push(`R.setGame(${JSON.stringify(game)});`);
   parts.push('})(window.R2W);');
   return parts.join('\n');

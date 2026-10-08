@@ -141,10 +141,28 @@ function loadProject(files) {
     }
   }
   applyPatches(prj);
+  collectAssets(prj, files, cfgKey ? dirname(cfgKey) : '');
   return prj;
 }
 // roblox2web.config.json -> "patches": [{ "script": "Shared.Config", "find": "text", "replace": "text" } | { "script": "...", "regex": "...", "flags": "g", "replace": "$1..." }]
 // Нужны, чтобы подставить в веб-демо свои значения (например демо-ID геймпассов) без правки исходников игры.
+// roblox2web.config.json -> "assets": { "<asset id>": "path/in/project.png" } — картинки вместо rbxassetid://<id>.
+// Файлы кладутся в сайт под assets/…; ImageLabel/ImageButton с Image = "rbxassetid://<id>" показывают их (без сети Roblox).
+const IMG_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
+function collectAssets(prj, files, base) {
+  prj.assetFiles = {}; const map = {};
+  const list = prj.config && prj.config.assets && typeof prj.config.assets === 'object' ? prj.config.assets : {};
+  for (const id of Object.keys(list)) {
+    const rel = String(list[id] || '').replace(/^\.\//, '');
+    const key = (base ? base + '/' : '') + rel;
+    if (!/^\d+$/.test(id)) { prj.warnings.push(`assets: ключ «${id}» — не числовой ID ассета`); continue; }
+    if (!rel || rel.includes('..') || !IMG_EXT.test(rel)) { prj.warnings.push(`assets[${id}]: «${rel}» — нужен путь к картинке внутри проекта`); continue; }
+    if (!files[key]) { prj.warnings.push(`assets[${id}]: файл «${rel}» не найден в проекте`); continue; }
+    const sitePath = 'assets/' + rel.replace(/^assets\//, '');
+    prj.assetFiles[sitePath] = files[key]; map[id] = sitePath;
+  }
+  prj.assetMap = map;
+}
 function applyPatches(prj) {
   const list = prj.config && Array.isArray(prj.config.patches) ? prj.config.patches : [];
   if (!list.length) return;

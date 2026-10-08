@@ -29,7 +29,7 @@ function build(outDir) {
   fs.mkdirSync(outDir, { recursive: true });
   const rt = bundle(path.join(root, 'rbx/boot.js'));
   const cv = bundle(path.join(root, 'rbx/site.js'), 'window.R2WConv={site:entry,convert:req("rbx/convert.js"),project:req("rbx/project.js")};');
-  const hdr = (n) => `/* roblox2web 2.3 ${n} — bundled from lua2js/ and rbx/ (MIT) */\n`;
+  const hdr = (n) => `/* roblox2web 2.4 ${n} — bundled from lua2js/ and rbx/ (MIT) */\n`;
   fs.writeFileSync(path.join(outDir, 'runtime.js'), hdr('runtime') + rt);
   fs.writeFileSync(path.join(outDir, 'converter.js'), hdr('converter') + cv);
   return { runtime: rt.length, converter: cv.length };

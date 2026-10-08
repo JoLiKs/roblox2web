@@ -14,7 +14,7 @@ async function zipDir(dir, out, include) {
   const ex = path.join(root, 'examples');
   for (const n of ['obby', 'tycoon', 'guiapp']) await zipDir(path.join(ex, n), path.join(ex, n + '.zip'));
   const gameDir = process.env.GAME_DIR || '/workspace/roblox-game';
-  if (fs.existsSync(gameDir)) await zipDir(gameDir, path.join(ex, 'PetCollectorSimulator.zip'), (r) => /^(src\/|default\.project\.json$|roblox2web\.config\.json$|README)/.test(r));
+  if (fs.existsSync(gameDir)) await zipDir(gameDir, path.join(ex, 'PetCollectorSimulator.zip'), (r) => /^(src\/|default\.project\.json$|roblox2web\.config\.json$|README|assets\/icon_512\.png$)/.test(r));
   const D = path.join(root, 'docs');
   fs.rmSync(D, { recursive: true, force: true });
   fs.mkdirSync(path.join(D, 'vendor'), { recursive: true }); fs.mkdirSync(path.join(D, 'sample'), { recursive: true });

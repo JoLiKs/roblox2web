@@ -30,6 +30,7 @@ function buildSite(prj, assets, opts) {
   files['conversion_report.json'] = JSON.stringify(result.report, null, 2) + '\n';
   files['.nojekyll'] = '';
   files['README.txt'] = `Веб-версия «${prj.name}», собранная roblox2web ${VERSION}.\n\nLuau-скрипты игры транспилированы в JavaScript (game.bundle.js) и выполняются в браузерном эмуляторе Roblox (runtime.js, three.js в vendor/).\nЗапуск: любой статический сервер, например  python3 -m http.server  и открыть http://localhost:8000/ (файл по file:// тоже обычно работает).\nПодробности и список неподдержанных API: CONVERSION_REPORT.txt.\n`;
+  for (const k of Object.keys(prj.assetFiles || {})) files[k] = prj.assetFiles[k]; // картинки из "assets" конфига
   for (const k of Object.keys(assets || {})) files[k] = assets[k];
   return { files, result };
 }

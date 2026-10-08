@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// roblox2web 2.3 CLI (node): Rojo project / .rbxlx archive -> static web site running the real (transpiled) Luau code
+// roblox2web 2.4 CLI (node): Rojo project / .rbxlx archive -> static web site running the real (transpiled) Luau code
 const fs = require('fs'), path = require('path'), zlib = require('zlib');
 const P = require('./rbx/project');
 const { buildSite } = require('./rbx/site');

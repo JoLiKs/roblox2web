@@ -1,4 +1,4 @@
-/* roblox2web 2.3 converter — bundled from lua2js/ and rbx/ (MIT) */
+/* roblox2web 2.4 converter — bundled from lua2js/ and rbx/ (MIT) */
 (function(){var defs={},cache={};function req(id){if(cache[id])return cache[id].exports;var m=cache[id]={exports:{}};defs[id](m,m.exports,function(p){return req(res(id,p));});return m.exports;}
 function res(from,p){var parts=from.split('/');parts.pop();p.split('/').forEach(function(s){if(s==='.'||s==='')return;if(s==='..')parts.pop();else parts.push(s);});var r=parts.join('/');if(!/\.js$/.test(r))r+='.js';return r;}
 defs["rbx/site.js"]=function(module,exports,require){'use strict';
@@ -33,6 +33,7 @@ function buildSite(prj, assets, opts) {
   files['conversion_report.json'] = JSON.stringify(result.report, null, 2) + '\n';
   files['.nojekyll'] = '';
   files['README.txt'] = `Веб-версия «${prj.name}», собранная roblox2web ${VERSION}.\n\nLuau-скрипты игры транспилированы в JavaScript (game.bundle.js) и выполняются в браузерном эмуляторе Roblox (runtime.js, three.js в vendor/).\nЗапуск: любой статический сервер, например  python3 -m http.server  и открыть http://localhost:8000/ (файл по file:// тоже обычно работает).\nПодробности и список неподдержанных API: CONVERSION_REPORT.txt.\n`;
+  for (const k of Object.keys(prj.assetFiles || {})) files[k] = prj.assetFiles[k]; // картинки из "assets" конфига
   for (const k of Object.keys(assets || {})) files[k] = assets[k];
   return { files, result };
 }
@@ -47,7 +48,7 @@ const P = require('./project');
 const D = require('./datatypes');
 const I = require('./instance');
 const { CLASSES } = I;
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 
 const SVC_LIBS = new Set(['string', 'table', 'math', 'os', 'bit32', 'utf8', 'coroutine', 'debug', 'task']);
 let supportedCache = null;
@@ -218,7 +219,7 @@ function bundleJs(result, prj, meta) {
     if (c.error) parts.push(`R.chunkError(${c.id},${JSON.stringify(c.name)},${JSON.stringify(c.error)});`);
     else parts.push(`R.chunk(${c.id},${JSON.stringify(c.name)},${c.code});`);
   }
-  const game = { name: prj.name, kind: prj.kind, tree: treeSpec(result.tree), config: prj.config || {}, report: result.report, meta: meta || {} };
+  const game = { name: prj.name, kind: prj.kind, tree: treeSpec(result.tree), config: prj.config || {}, assets: prj.assetMap || {}, report: result.report, meta: meta || {} };
   parts.push(`R.setGame(${JSON.stringify(game)});`);
   parts.push('})(window.R2W);');
   return parts.join('\n');
@@ -1292,10 +1293,28 @@ function loadProject(files) {
     }
   }
   applyPatches(prj);
+  collectAssets(prj, files, cfgKey ? dirname(cfgKey) : '');
   return prj;
 }
 // roblox2web.config.json -> "patches": [{ "script": "Shared.Config", "find": "text", "replace": "text" } | { "script": "...", "regex": "...", "flags": "g", "replace": "$1..." }]
 // Нужны, чтобы подставить в веб-демо свои значения (например демо-ID геймпассов) без правки исходников игры.
+// roblox2web.config.json -> "assets": { "<asset id>": "path/in/project.png" } — картинки вместо rbxassetid://<id>.
+// Файлы кладутся в сайт под assets/…; ImageLabel/ImageButton с Image = "rbxassetid://<id>" показывают их (без сети Roblox).
+const IMG_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
+function collectAssets(prj, files, base) {
+  prj.assetFiles = {}; const map = {};
+  const list = prj.config && prj.config.assets && typeof prj.config.assets === 'object' ? prj.config.assets : {};
+  for (const id of Object.keys(list)) {
+    const rel = String(list[id] || '').replace(/^\.\//, '');
+    const key = (base ? base + '/' : '') + rel;
+    if (!/^\d+$/.test(id)) { prj.warnings.push(`assets: ключ «${id}» — не числовой ID ассета`); continue; }
+    if (!rel || rel.includes('..') || !IMG_EXT.test(rel)) { prj.warnings.push(`assets[${id}]: «${rel}» — нужен путь к картинке внутри проекта`); continue; }
+    if (!files[key]) { prj.warnings.push(`assets[${id}]: файл «${rel}» не найден в проекте`); continue; }
+    const sitePath = 'assets/' + rel.replace(/^assets\//, '');
+    prj.assetFiles[sitePath] = files[key]; map[id] = sitePath;
+  }
+  prj.assetMap = map;
+}
 function applyPatches(prj) {
   const list = prj.config && Array.isArray(prj.config.patches) ? prj.config.patches : [];
   if (!list.length) return;
@@ -4633,6 +4652,7 @@ ENV.boot = function (opts) {
   ENV.placeKey = opts.placeKey || 'game';
   ENV.persist = opts.persist !== false;
   ENV.market.catalog = opts.catalog || ENV.market.catalog;
+  ENV.assetMap = opts.assets || {}; // "assets" конфига: id ассета -> путь картинки в сайте
   ENV.market.autoPurchase = opts.autoPurchase !== false;
   ENV.errorCount = 0;
   ENV.makeDataModel({ name: opts.name, seed: opts.seed });
@@ -4722,6 +4742,10 @@ const ctxName = () => { const c = CO.current ? CO.current.ctx : null; return c ?
 /* ------------------------------------------------------------------ service classes */
 const SERVICE_NAMES = ['Workspace', 'Players', 'Lighting', 'ReplicatedStorage', 'ReplicatedFirst', 'ServerStorage', 'ServerScriptService', 'StarterGui', 'StarterPack', 'StarterPlayer', 'SoundService', 'Chat', 'Teams', 'TextChatService', 'RunService', 'TweenService', 'Debris', 'CollectionService', 'HttpService', 'DataStoreService', 'MemoryStoreService', 'MessagingService', 'MarketplaceService', 'PolicyService', 'UserInputService', 'ContextActionService', 'ProximityPromptService', 'GuiService', 'TextService', 'TeleportService', 'BadgeService', 'PathfindingService', 'PhysicsService', 'LocalizationService', 'GroupService', 'SocialService', 'VRService', 'AnalyticsService', 'ContentProvider', 'HapticService', 'AssetService', 'InsertService', 'Stats', 'LogService', 'ScriptContext', 'GamepadService', 'MaterialService', 'TestService', 'AvatarEditorService', 'VoiceChatService', 'StarterPlayerScripts', 'StarterCharacterScripts', 'NetworkClient', 'NetworkServer', 'PlayerGui', 'UserGameSettings', 'RbxAnalyticsService', 'CoreGui', 'Selection', 'ChangeHistoryService', 'ServiceProvider', 'TimerService', 'ExperienceService', 'CaptureService', 'MouseService', 'ReplicatedFirstX'];
 const stubSvc = new Set();
+// ReplicatedFirst: свой экран загрузки (RemoveDefaultLoadingScreen) — в браузере стандартного экрана Roblox нет, вызов ничего не делает
+defClass('ReplicatedFirst', 'Instance', { service: true, events: ['FinishedReplicating', 'RemoveDefaultLoadingGuiSignal'], methods: {
+  RemoveDefaultLoadingScreen() { return E; }, IsFinishedReplicating: () => true, SetDefaultLoadingGuiRemoved() { return E; },
+} });
 for (const n of SERVICE_NAMES) {
   if (!CLASSES.has(n) && !['StarterPlayerScripts', 'StarterCharacterScripts', 'PlayerGui', 'ReplicatedFirstX'].includes(n)) { defClass(n, 'Instance', { service: true }); stubSvc.add(n); }
 }
