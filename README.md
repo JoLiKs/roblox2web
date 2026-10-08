@@ -1,12 +1,12 @@
-# roblox2web 2.2
+# roblox2web 2.3
 
 Конвертер Roblox-проекта (Rojo-дерево, `.rbxlx`, zip/tar.gz, каталог) в **статическую веб-версию**, которая запускает **исходный Luau-код** игры в браузере.
 
 * **Luau → JavaScript транспилятор** (`lua2js/`): собственный парсер Luau (типы, `continue`, составные присваивания, `if`-выражения, interp-строки, генерики, атрибуты) и генератор JS. Корутины Lua = JS-генераторы, строки байтовые, многозначные возвраты, метатаблицы, `pcall/error`, `string.format/pack-less` подмножество, `table.*`, `math.*`, `os.*`, `utf8`, `task.*`.
-* **Эмулятор Roblox** (`rbx/`): дерево Instance, свойства и сигналы, `Players/Workspace/ReplicatedStorage/ServerScriptService/StarterGui…`, RemoteEvent/RemoteFunction (клиент ↔ «сервер» в одной вкладке, с задержкой), DataStore (localStorage), MarketplaceService (демо-покупки), TweenService, ProximityPrompt, физика упрощённая (OBB), 3D через three.js, GUI на DOM (Frame/TextLabel/TextButton/ScrollingFrame/UIListLayout/UIGridLayout/UIScale/…), BillboardGui, `Model:ScaleTo/GetScale` (размеры, позиции, Motor6D/Weld C0/C1, Attachment, HipHeight), NPC-риги на `Humanoid:MoveTo`, ввод мыши/клавиатуры/тач.
+* **Эмулятор Roblox** (`rbx/`): дерево Instance, свойства и сигналы, `Players/Workspace/ReplicatedStorage/ServerScriptService/StarterGui…`, RemoteEvent/RemoteFunction (клиент ↔ «сервер» в одной вкладке, с задержкой), DataStore (localStorage), MarketplaceService (демо-покупки), TweenService, ProximityPrompt, физика упрощённая (OBB), 3D через three.js, GUI на DOM (Frame/TextLabel/TextButton/ScrollingFrame/UIListLayout/UIGridLayout/UIScale/…), BillboardGui, `Tool` (хотбар-инструменты: Equipped/Activated, RightGrip), `Model:ScaleTo/GetScale` (размеры, позиции, Motor6D/Weld C0/C1, Attachment, HipHeight), NPC-риги на `Humanoid:MoveTo`, ввод мыши/клавиатуры/тач (динамический джойстик и кнопка прыжка, как в мобильном Roblox).
 * **Конвертор**: CLI (`roblox2web.js`, Node ≥ 18) и онлайн-версия (<https://joliks.github.io/roblox2web/>, всё выполняется в браузере).
 
-Пример: игра Pet Collector Simulator v2.3 (русский/английский по стране игрока, событие «Суперсила» с ботами-игроками) — <https://joliks.github.io/pet-collector-sim/> (её Luau-код исполняется эмулятором; это не шаблон, а те же скрипты).
+Пример: игра Pet Collector Simulator v2.5 (русский/английский по стране игрока, HUD как в Roblox-симуляторах с хотбаром из настоящих `Tool`, событие «Суперсила» с ботами-игроками) — <https://joliks.github.io/pet-collector-sim/> (её Luau-код исполняется эмулятором; это не шаблон, а те же скрипты).
 
 ## Использование
 
@@ -53,7 +53,7 @@ node roblox2web.js game.zip -o out/ --strict               # ошибка, ес�
 
 ```bash
 cd tests/conformance && node harness.js     # 528 кейсов, 9 файлов — результаты сверяются с эталонным интерпретатором luau
-node tests/emulator/run.js                  # 167 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, LocalizationService/гео-IP, ScaleTo, NPC MoveTo, ?attr., DescendantAdded поддерева, …)
+node tests/emulator/run.js                  # 185 проверок эмулятора (Instance, Remote, GUI-раскладка, физика, DataStore, Motor6D-риг R6, LocalizationService/гео-IP, ScaleTo, NPC MoveTo, ?attr., DescendantAdded поддерева, Tool, PivotTo без дрейфа, …)
 python3 tests/browser/test_sites.py         # Chromium: 3 синтетических проекта (obby, tycoon, GUI-приложение)
 python3 tests/browser/test_online.py        # Chromium: онлайн-конвертор
 ```
@@ -71,6 +71,13 @@ vendor/     three.min.js r149, jszip
 tests/      conformance, emulator, browser
 roblox2web.py   резервный конвертор v1 (шаблонный, только pet-sim): --mode template
 ```
+
+## Что нового в 2.3
+* **`Tool`**: `Equipped`/`Unequipped` при смене родителя (Backpack ↔ персонаж), в руке только один инструмент, `RightGrip` + `Handle` в правой руке (с учётом `Grip`), `Activated`/`Deactivated` по клику/тапу в мир (не по GUI), `Humanoid:UnequipTools()`, `Tool:Deactivate()`; `GuiService:GetGuiInset()` = высота верхней панели (тест `12_tools`, директива `-- input:`).
+* **Сенсорное управление как в мобильном Roblox**: динамический джойстик появляется под пальцем в левой нижней зоне, кнопка прыжка со стрелкой справа снизу (70/120 px по размеру экрана), более заметная на светлом фоне.
+* **`PivotTo` / `SetPrimaryPartCFrame` без дрейфа**: поворот переортонормируется — после тысяч перемещений модели матрица не «раздувается» (раньше это могло подвесить пространственную сетку, тест `13_pivot_drift`).
+* **`TextScaled` + `TextWrapped`**: как в Roblox, длинный текст переносится на строки и подбирается наибольший кегль, при котором он помещается (раньше кегль считался по одной строке и длинные подписи становились мелкими или обрезались).
+* Шрифты: для `Enum.Font.FredokaOne` сначала пробуется одноимённый шрифт (если установлен в системе), затем округлые системные аналоги.
 
 ## Что нового в 2.2
 * `Model:ScaleTo(s)` / `Model:GetScale()`: масштаб вокруг pivot — размеры и позиции частей, `C0/C1` у Motor6D/Weld/ManualWeld/Snap, `Attachment.CFrame`, `Humanoid.HipHeight`; `ScaleTo(0)` бросает ошибку, как в Roblox.

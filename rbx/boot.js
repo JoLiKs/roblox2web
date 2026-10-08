@@ -21,7 +21,7 @@ const UI_TEXT = {
 
 const chunks = []; const errors = []; let game = null; let started = false;
 const R2W = {
-  version: '2.2.0',
+  version: '2.3.0',
   chunk(id, name, factory) { ENV.chunkFactories.set(id, factory); C.ST.chunks[id] = name; chunks.push(id); },
   chunkError(id, name, msg) { errors.push({ id, name, msg }); },
   setGame(g) { game = g; R2W.game = g; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => R2W.start()); else setTimeout(() => R2W.start(), 0); },

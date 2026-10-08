@@ -297,8 +297,23 @@ class GuiRenderer {
     for (const c of i.children) if (c.className === 'UITextSizeConstraint') { /* applied below */ }
     if (p.TextScaled) {
       const aw = a.w - pad[0] - pad[2], ah = a.h - pad[1] - pad[3];
-      const m = measureText(text, 100, p.Font, p.TextWrapped ? 1e9 : 1e9, p.RichText);
-      size = Math.max(1, Math.min(100 * ah / Math.max(1, m.h), 100 * aw / Math.max(1, m.w), 100));
+      const ck = text + '\u0001' + aw + '|' + ah + '|' + (p.TextWrapped ? 1 : 0) + (p.RichText ? 1 : 0) + '|' + (p.Font && p.Font.name);
+      if (rec.scaledKey === ck) size = rec.scaledSize;
+      else {
+        const m = measureText(text, 100, p.Font, 1e9, p.RichText);
+        const byH = 100 * ah / Math.max(1, m.h);
+        size = Math.max(1, Math.min(byH, 100 * aw / Math.max(1, m.w), 100));
+        // как в Roblox: TextScaled + TextWrapped — длинный текст переносится на строки и остаётся крупнее
+        if (p.TextWrapped && size < Math.min(byH, 100) - 0.5 && /\s/.test(text)) {
+          let lo = size, hi = Math.min(byH, 100);
+          for (let k = 0; k < 9; k++) {
+            const mid = (lo + hi) / 2, mm = measureText(text, mid, p.Font, aw, p.RichText);
+            if (mm.h <= ah && mm.w <= aw) lo = mid; else hi = mid;
+          }
+          size = lo;
+        }
+        rec.scaledKey = ck; rec.scaledSize = size;
+      }
       for (const c of i.children) if (c.className === 'UITextSizeConstraint') size = Math.min(Math.max(size, c.props.MinTextSize), c.props.MaxTextSize);
     }
     const host = rec.textHost, span = rec.span;

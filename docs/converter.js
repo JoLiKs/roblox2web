@@ -1,4 +1,4 @@
-/* roblox2web 2.2 converter — bundled from lua2js/ and rbx/ (MIT) */
+/* roblox2web 2.3 converter — bundled from lua2js/ and rbx/ (MIT) */
 (function(){var defs={},cache={};function req(id){if(cache[id])return cache[id].exports;var m=cache[id]={exports:{}};defs[id](m,m.exports,function(p){return req(res(id,p));});return m.exports;}
 function res(from,p){var parts=from.split('/');parts.pop();p.split('/').forEach(function(s){if(s==='.'||s==='')return;if(s==='..')parts.pop();else parts.push(s);});var r=parts.join('/');if(!/\.js$/.test(r))r+='.js';return r;}
 defs["rbx/site.js"]=function(module,exports,require){'use strict';
@@ -47,7 +47,7 @@ const P = require('./project');
 const D = require('./datatypes');
 const I = require('./instance');
 const { CLASSES } = I;
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 
 const SVC_LIBS = new Set(['string', 'table', 'math', 'os', 'bit32', 'utf8', 'coroutine', 'debug', 'task']);
 let supportedCache = null;
@@ -3786,6 +3786,7 @@ class Instance extends Userdata {
       for (let a = np; a; a = a.parent) for (const d of sub) a.fireSignal('DescendantAdded', d);
       if (np.waiters) np.resolveWaiters(this);
     }
+    if (this.className === 'Tool' && ENV.onToolParent) ENV.onToolParent(this, old, np);
     if (!wasIn && nowIn) this.walkDm(true);
     this.changed('Parent');
   }
@@ -4106,10 +4107,26 @@ function scaleModel(self, s) {
   self.scaleFactor = s;
 }
 defClass('Actor', 'Model');
+// Roblox держит поворот CFrame ортонормированным; без этого cf * inverse(cur) * cur копит ошибку
+// (inverse = транспонирование) и после тысяч PivotTo матрица «взрывается».
+function orthoCF(c) {
+  const r = c.r;
+  let ax = r[0], ay = r[3], az = r[6], bx = r[1], by = r[4], bz = r[7];
+  const la = Math.hypot(ax, ay, az), lb = Math.hypot(bx, by, bz), dab = ax * bx + ay * by + az * bz;
+  if (Math.abs(la - 1) < 1e-9 && Math.abs(lb - 1) < 1e-9 && Math.abs(dab) < 1e-9) return c;
+  if (!(la > 1e-12) || !isFinite(la)) return new D.CFrame(c.x, c.y, c.z);
+  ax /= la; ay /= la; az /= la;
+  const d = ax * bx + ay * by + az * bz; bx -= d * ax; by -= d * ay; bz -= d * az;
+  const lb2 = Math.hypot(bx, by, bz);
+  if (!(lb2 > 1e-12) || !isFinite(lb2)) return new D.CFrame(c.x, c.y, c.z);
+  bx /= lb2; by /= lb2; bz /= lb2;
+  const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+  return new D.CFrame(c.x, c.y, c.z, [ax, bx, cx, ay, by, cy, az, bz, cz]);
+}
 function pivotModel(self, cf) {
-  const cur = I.modelPivot(self);
-  const delta = D.cfMul(cf, D.cfInverse(cur));
-  for (const d of self.descendants()) if (d.isA('BasePart')) setCF(d, D.cfMul(delta, d.props.CFrame));
+  const cur = orthoCF(I.modelPivot(self));
+  const delta = orthoCF(D.cfMul(cf, D.cfInverse(cur)));
+  for (const d of self.descendants()) if (d.isA('BasePart')) setCF(d, orthoCF(D.cfMul(delta, d.props.CFrame)));
   if (self.props.WorldPivot) self.props.WorldPivot = D.cfMul(delta, self.props.WorldPivot);
 }
 function bboxOf(m) {
@@ -4169,7 +4186,7 @@ defClass('AnimationTrack', 'Instance', { noCreate: true, props: { Animation: und
   AdjustSpeed(self, s) { self.setProp('Speed', s); return E; }, AdjustWeight() { return E; }, GetMarkerReachedSignal(self) { return self.signal('Marker'); }, GetTimeOfKeyframe() { return 0; },
 } });
 defClass('Animator', 'Instance', { methods: { LoadAnimation(self, anim) { const t = newInstance('AnimationTrack'); t.props.Animation = anim; return t; }, GetPlayingAnimationTracks() { return new LuaTable(); } } });
-defClass('Tool', 'Instance', { props: { CanBeDropped: true, Enabled: true, Grip: new CFrame(0, 0, 0), ManualActivationOnly: false, RequiresHandle: true, ToolTip: '', TextureId: '' }, events: ['Activated', 'Deactivated', 'Equipped', 'Unequipped'], methods: { Activate(self) { self.fireSignal('Activated'); return E; } } });
+defClass('Tool', 'Instance', { props: { CanBeDropped: true, Enabled: true, Grip: new CFrame(0, 0, 0), ManualActivationOnly: false, RequiresHandle: true, ToolTip: '', TextureId: '' }, events: ['Activated', 'Deactivated', 'Equipped', 'Unequipped'], methods: { Activate(self) { self.fireSignal('Activated'); return E; }, Deactivate(self) { self.fireSignal('Deactivated'); return E; } } });
 defClass('Backpack', 'Instance');
 defClass('StarterGear', 'Instance');
 
@@ -4210,8 +4227,8 @@ methods: {
   SetStateEnabled() { return E; }, GetStateEnabled() { return true; },
   LoadAnimation(self) { return newInstance('AnimationTrack'); },
   GetPlayingAnimationTracks() { return new LuaTable(); },
-  EquipTool(self, tool) { if (self.parent) tool.setParent(self.parent); return E; },
-  UnequipTools() { return E; },
+  EquipTool(self, tool) { if (self.parent && tool && tool.className === 'Tool') tool.setParent(self.parent); return E; },
+  UnequipTools(self) { const ch = self.parent; if (!ch) return E; const pl = ENV.svc('Players').children.find((p) => p.props.Character === ch); const bp = pl && pl.findChild('Backpack'); for (const c of ch.children.slice()) if (c.className === 'Tool') { if (bp) c.setParent(bp); } return E; },
   AddAccessory() { return E; }, RemoveAccessories() { return E; }, GetAccessories() { return new LuaTable(); },
   ApplyDescription() { return E; }, GetAppliedDescription() { return undefined; }, BuildRigFromAttachments() { return E; },
   ReplaceBodyPartR15() { return false; },
@@ -5198,7 +5215,7 @@ defMethods('PolicyService', { GetPolicyInfoForPlayerAsync: function* (self, p) {
 defMethods('TextService', { GetTextSize(self, text, size, font, bounds) { return ENV.textSize ? ENV.textSize(text, size, font, bounds ? bounds.x : 1e9) : new Vector2(text.length * size * 0.5, size * 1.2); }, FilterStringAsync: function* (self, text) { return { filtered: text }; }, });
 defMethods('TeleportService', { Teleport() { noteUnsupported('TeleportService:Teleport'); ENV.warn('TeleportService is not supported in the browser demo (teleport ignored)'); return E; }, TeleportAsync() { noteUnsupported('TeleportService:TeleportAsync'); ENV.warn('TeleportService is not supported in the browser demo (teleport ignored)'); return E; }, GetLocalPlayerTeleportData() { return undefined; }, });
 defMethods('BadgeService', { AwardBadge() { return true; }, UserHasBadgeAsync: function* () { return false; }, GetBadgeInfoAsync: function* () { return new LuaTable(); } });
-defMethods('GuiService', { GetGuiInset() { return [new Vector2(0, 0), new Vector2(0, 0)]; }, IsTenFootInterface() { return false; }, GetScreenResolution() { return ENV.viewport ? ENV.viewport() : new Vector2(1280, 720); }, SetMenuIsOpen() { return E; } });
+defMethods('GuiService', { GetGuiInset() { return [new Vector2(0, ENV.layout ? ENV.layout.inset : 36), new Vector2(0, 0)]; }, IsTenFootInterface() { return false; }, GetScreenResolution() { return ENV.viewport ? ENV.viewport() : new Vector2(1280, 720); }, SetMenuIsOpen() { return E; } });
 CLASSES.get('GuiService').props.set('MenuIsOpen', { def: false });
 CLASSES.get('GuiService').props.set('SelectedObject', { def: undefined });
 CLASSES.get('GuiService').props.set('TouchControlsEnabled', { def: true });
@@ -5574,7 +5591,7 @@ const D = require('./datatypes');
 const I = require('./instance');
 const S = require('./services');
 const CL = require('./classes');
-const { ENV, Instance, CLASSES } = I;
+const { ENV, Instance, CLASSES, newInstance } = I;
 const { Vector3, CFrame, v3 } = D;
 const En = (t, n) => D.EnumLib.lget(t).lget(n);
 
@@ -5825,9 +5842,9 @@ function rebuildAssemblies() {
   const parent = new Map(); const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
   const edges = [];
   for (const rec of world.parts.values()) {
-    for (const ch of rec.inst.children) if ((ch.className === 'WeldConstraint' || ch.className === 'Weld') && ch.props.Enabled !== false) { const a = ch.props.Part0, b = ch.props.Part1; if (a && b && world.parts.has(a) && world.parts.has(b)) edges.push([a, b]); }
+    for (const ch of rec.inst.children) if ((ch.className === 'WeldConstraint' || ch.className === 'Weld') && ch.props.Enabled !== false) { const a = ch.props.Part0, b = ch.props.Part1; if (a && b && world.parts.has(a) && world.parts.has(b) && !a.charPart && !b.charPart) edges.push([a, b]); }
   }
-  for (const p of world.parts.keys()) { p.free = false; world.parts.get(p).root = null; }
+  for (const p of world.parts.keys()) { p.free = false; const r = world.parts.get(p); r.root = null; r.follower = false; }
   for (const [a, b] of edges) { if (!parent.has(a)) parent.set(a, a); if (!parent.has(b)) parent.set(b, b); parent.set(find(a), find(b)); }
   const groups = new Map();
   for (const p of parent.keys()) { const r = find(p); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(p); }
@@ -5945,6 +5962,7 @@ function poseRig(ctl, swing, air, fall) {
     joint('Neck', 0);
     joint('Right Shoulder', air ? 2.8 : -a); joint('Left Shoulder', air ? -2.8 : -a);
     joint('Right Hip', air ? -0.35 : a); joint('Left Hip', air ? -0.35 : a);
+    holdTool(ctl);
     return;
   }
   const put = (name, cf) => { if (P[name]) setPart(P[name], D.cfMul(root, cf)); };
@@ -5954,7 +5972,50 @@ function poseRig(ctl, swing, air, fall) {
   const leg = (x, ang) => { const R = rotX(ang); const o = D.rotVec(R, v3(0, -1, 0)); return new CFrame(x, -1 + o.y, o.z, R); };
   put('Left Arm', arm(-1.5, air ? 2.8 : a)); put('Right Arm', arm(1.5, air ? 2.8 : -a));
   put('Left Leg', leg(-0.5, air ? 0.35 : -a)); put('Right Leg', leg(0.5, air ? -0.35 : a));
+  holdTool(ctl);
 }
+/* ------------------------------------------------ Tools: equip (parent -> character), RightGrip, Handle in the right hand */
+// Roblox RightGrip: Part0 = Right Arm, Part1 = Handle, C0 = CFrame(0,-1,0) * Angles(-90°,0,0), C1 = Tool.Grip
+const GRIP_C0 = new CFrame(0, -1, 0, [1, 0, 0, 0, 0, 1, 0, -1, 0]);
+const humOf = (m) => (m && m.className === 'Model' ? m.children.find((c) => c.className === 'Humanoid') : null);
+function holdTool(ctl) {
+  const m = ctl.m; let tool = null;
+  for (const c of m.children) if (c.className === 'Tool') { tool = c; break; }
+  if (!tool || !tool.held) return;
+  const arm = m.findChild('Right Arm') || m.findChild('RightHand'); const h = tool.held.handle;
+  if (!arm || !h || h.destroyed || h.parent == null) return;
+  const hcf = D.cfMul(D.cfMul(arm.props.CFrame, GRIP_C0), D.cfInverse(tool.props.Grip || new CFrame(0, 0, 0)));
+  setPart(h, hcf);
+  for (const [p, rel] of tool.held.rel) if (!p.destroyed && tool.isAncestorOf(p)) setPart(p, D.cfMul(hcf, rel));
+}
+function toolParts(tool) { return tool.descendants().filter((d) => d.isA('BasePart')); }
+ENV.onToolParent = function (tool, old, np) {
+  const fire = (n, ...a) => { try { tool.fireSignal(n, ...a); } catch (e) { /* */ } };
+  if (old && humOf(old) && tool.held) {
+    const arm = old.findChild('Right Arm') || old.findChild('RightHand'); const g = arm && arm.findChild('RightGrip');
+    if (g && g.props.Part1 === tool.held.handle) g.destroy();
+    for (const p of toolParts(tool)) { p.charPart = false; const r = world.parts.get(p); if (r) r.inCtl = false; }
+    tool.held = null; world.asmDirty = true;
+    if (tool.toolDown) { tool.toolDown = false; fire('Deactivated'); }
+    fire('Unequipped');
+  }
+  if (np && humOf(np) && np.findChild('HumanoidRootPart')) {
+    const pl = ENV.svc('Players').children.find((p) => p.props.Character === np); const bp = pl && pl.findChild('Backpack');
+    for (const c of np.children.slice()) if (c !== tool && c.className === 'Tool' && bp) c.setParent(bp); // one tool in hand
+    if (tool.parent !== np) return;
+    const handle = tool.findChild('Handle');
+    const held = { handle: handle && handle.isA('BasePart') ? handle : null, rel: new Map() };
+    const hinv = held.handle ? D.cfInverse(held.handle.props.CFrame) : null;
+    for (const p of toolParts(tool)) {
+      p.charPart = true; const r = world.parts.get(p); if (r) r.inCtl = true;
+      if (held.handle && p !== held.handle) held.rel.set(p, D.cfMul(hinv, p.props.CFrame));
+    }
+    tool.held = held; world.asmDirty = true;
+    const arm = np.findChild('Right Arm') || np.findChild('RightHand');
+    if (arm && held.handle) { const w = newInstance('Weld'); w.props.Name = 'RightGrip'; w.props.Part0 = arm; w.props.Part1 = held.handle; w.props.C0 = GRIP_C0; w.props.C1 = tool.props.Grip || new CFrame(0, 0, 0); w.setParent(arm); }
+    fire('Equipped', pl && pl.isLocal && ENV.input ? ENV.input.mouse(pl) : undefined);
+  }
+};
 function ctlStep(h, dt, ctl) {
   const hrp = ctl.hrp;
   const m = ctl.m;
@@ -6279,6 +6340,18 @@ const input = ENV.input = {
     const m = ENV.mouse;
     if (m && !gpe) m.fireSignal(btn === 2 ? (down ? 'Button2Down' : 'Button2Up') : (down ? 'Button1Down' : 'Button1Up'));
     if (!gpe && btn === 0 && !down) ENV.clicks.click(x, y);
+    if (btn === 0) input.tool(down && !gpe);
+  },
+  // Tool.Activated / Deactivated: a click or tap in the world (not on GUI) while a Tool is equipped
+  tool(down) {
+    const ch = ENV.localPlayer && ENV.localPlayer.props.Character; if (!ch) return;
+    let t = null; for (const c of ch.children) if (c.className === 'Tool') { t = c; break; }
+    if (!t) return;
+    if (down) {
+      const hum = ch.children.find((c) => c.className === 'Humanoid');
+      if (!hum || hum.props.Health <= 0 || !t.props.Enabled || t.props.ManualActivationOnly || t.toolDown) return;
+      t.toolDown = true; t.fireSignal('Activated');
+    } else if (t.toolDown) { t.toolDown = false; t.fireSignal('Deactivated'); }
   },
   mouseMove(x, y, dx, dy, gpe) {
     input.mousePos = new Vector2(x, y); input.mouseDelta = new Vector2(dx, dy);
@@ -6291,6 +6364,7 @@ const input = ENV.input = {
     input.lastType = 'Touch';
     input.fire('Touch', 'Unknown', state, v3(x, y, 0), gpe);
     const uis = ENV.svc('UserInputService');
+    if (state === 'Begin') input.tool(!gpe); else if (state === 'End') input.tool(false);
     if (state === 'End' && !gpe) { uis.fireSignal('TouchTap', tbl1(new Vector2(x, y)), false); uis.fireSignal('TouchTapInWorld', new Vector2(x, y), false); ENV.clicks.click(x, y); }
   },
 };
